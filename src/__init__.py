@@ -1,0 +1,1 @@
+"""Vast Revenue Monitor package."""

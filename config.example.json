@@ -1,0 +1,13 @@
+{
+  "discord_webhook_url": "https://discord.com/api/webhooks/REPLACE_ME/REPLACE_ME",
+  "vast_api_key": "REPLACE_ME",
+  "vast_base_url": "https://console.vast.ai/api/v0",
+  "daily_goal_usd": 120.0,
+  "timezone": "Asia/Tokyo",
+  "exchange_api_url": "https://open.er-api.com/v6/latest/USD",
+  "exchange_timeout_seconds": 15,
+  "request_timeout_seconds": 30,
+  "log_level": "INFO",
+  "state_dir": "state",
+  "log_dir": "logs"
+}
