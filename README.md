@@ -14,24 +14,101 @@ Production-ready Python 3.12+ service for monitoring Vast.ai revenue and posting
 - 30-day compressed log rotation, JSON state files, and yearly CSV history export.
 - Modular architecture prepared for Prometheus, Grafana, Slack, LINE, web UI, SQLite, and PostgreSQL extensions.
 
-## Installation on Ubuntu 24.04 LTS
+## Complete installation on a clean Ubuntu 24.04 LTS server
 
-### Shortest interactive installation
+### Prerequisites
 
-On a clean Ubuntu 24.04 server, install Git, clone the repository, and run the
-installer once. Replace `<repository-url>` with this GitHub repository's clone URL.
+The server needs working DNS, HTTPS internet access, and a user with `sudo` access.
+Have the following credentials ready:
+
+1. A Discord webhook URL created for the destination channel.
+2. A Vast.ai API key.
+
+No Python, virtual environment, `rsync`, system user, or systemd service needs to
+be configured manually.
+
+### Step 1: install Git and clone the project
+
+Git is required only to clone the repository. Replace `<repository-url>` with the
+HTTPS clone URL shown by GitHub's **Code** button.
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
 git clone <repository-url> vast-revenue-monitor
 cd vast-revenue-monitor
+```
+
+### Step 2: optional non-destructive validation
+
+This checks the repository and host tools without installing or changing files:
+
+```bash
+sudo bash install.sh --check
+```
+
+The final line should be:
+
+```text
+[vast-revenue-monitor] Validation completed; no changes were made.
+```
+
+### Step 3: run the installer once
+
+```bash
 sudo bash install.sh
 ```
 
-The installer securely prompts for the Discord webhook URL and Vast.ai API key.
-It then installs Ubuntu and Python dependencies, generates `config.json`, creates
-all directories, installs the systemd unit, enables and starts the service, and
-prints its final status. No manual virtual-environment or file-copy step is needed.
+Enter the Discord webhook URL and Vast.ai API key when prompted. Input is hidden,
+including the webhook because both values are secrets. The installer then:
+
+1. Installs `ca-certificates`, Python 3.12, `python3.12-venv`, and `rsync` with APT.
+2. Builds and validates a complete release in a temporary directory.
+3. Creates `config.json` from `config.example.json` on the first installation.
+4. Creates the Python virtual environment and installs all Python dependencies.
+5. Creates `state/` and `logs/`, the service user, ownership, and permissions.
+6. Installs the systemd unit and runs `daemon-reload`, `enable`, and `restart`.
+7. Confirms that the service is active and prints `systemctl status`.
+
+Success ends with:
+
+```text
+[vast-revenue-monitor] Installation completed successfully.
+```
+
+If any command fails, the message includes the command and line number. An upgrade
+restores the prior application, unit, and running service. A failed first install
+removes the incomplete application and unit.
+
+### Step 4: verify operation
+
+```bash
+sudo systemctl is-enabled vast-balance.service
+sudo systemctl is-active vast-balance.service
+sudo systemctl status vast-balance.service --no-pager
+sudo journalctl -u vast-balance.service -n 50 --no-pager
+```
+
+The first two commands must print `enabled` and `active`. API or webhook errors are
+shown by the journal command and in
+`/opt/vast-revenue-monitor/logs/vast-revenue-monitor.log`.
+
+Installed files are located at:
+
+```text
+/opt/vast-revenue-monitor/
+├── .venv/
+├── config.json
+├── logs/
+├── state/
+├── src/
+├── systemd/
+└── balance.py
+```
+
+`config.json` is readable only by root and the service group. Application code is
+root-owned, while the service can write only its `state/` and `logs/` directories.
+
+### Unattended installation
 
 For unattended installation, pass credentials through `sudo --preserve-env`:
 
@@ -42,11 +119,7 @@ sudo --preserve-env=DISCORD_WEBHOOK_URL,VAST_API_KEY bash install.sh
 unset DISCORD_WEBHOOK_URL VAST_API_KEY
 ```
 
-Validate the host and repository without changing the system:
-
-```bash
-sudo bash install.sh --check
-```
+### Re-running and upgrading
 
 Re-running `sudo bash install.sh` performs an upgrade. An existing
 `/opt/vast-revenue-monitor/config.json`, `state/`, and `logs/` are preserved.
@@ -106,8 +179,7 @@ sudo journalctl -u vast-balance.service -f
 ```bash
 cd /path/to/vast-revenue-monitor
 git pull
-sudo ./install.sh
-sudo systemctl restart vast-balance.service
+sudo bash install.sh
 ```
 
 Before upgrading, back up `/opt/vast-revenue-monitor/config.json` and the `state/`

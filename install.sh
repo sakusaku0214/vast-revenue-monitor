@@ -15,6 +15,7 @@ INSTALL_COMMITTED=false
 APP_ACTIVATED=false
 HAD_UNIT=false
 USER_CREATED=false
+GROUP_CREATED=false
 
 log() {
   printf '[vast-revenue-monitor] %s\n' "$*"
@@ -59,6 +60,9 @@ cleanup() {
     fi
     if [[ "${USER_CREATED}" == true ]]; then
       userdel "${SERVICE_USER}" 2>/dev/null || true
+    fi
+    if [[ "${GROUP_CREATED}" == true ]]; then
+      groupdel "${SERVICE_USER}" 2>/dev/null || true
     fi
   fi
   [[ -z "${STAGING_DIR}" ]] || rm -rf -- "${STAGING_DIR}"
@@ -179,12 +183,21 @@ fi
     'from pathlib import Path; from src.config import AppConfig; AppConfig.load(Path("config.json"))'
 ) || fail "config.json validation failed; existing installation was not changed"
 
+if ! getent group "${SERVICE_USER}" >/dev/null 2>&1; then
+  groupadd --system "${SERVICE_USER}"
+  GROUP_CREATED=true
+fi
 if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
-  useradd --system --home-dir "${APP_DIR}" --shell /usr/sbin/nologin "${SERVICE_USER}"
+  useradd --system --gid "${SERVICE_USER}" --home-dir "${APP_DIR}" \
+    --shell /usr/sbin/nologin "${SERVICE_USER}"
   USER_CREATED=true
 fi
-chown -R "${SERVICE_USER}:${SERVICE_USER}" "${STAGING_DIR}"
-chmod 600 "${STAGING_DIR}/config.json"
+chown -R root:root "${STAGING_DIR}"
+chown "root:${SERVICE_USER}" "${STAGING_DIR}/config.json"
+chown -R "${SERVICE_USER}:${SERVICE_USER}" \
+  "${STAGING_DIR}/state" "${STAGING_DIR}/logs"
+chmod 755 "${STAGING_DIR}"
+chmod 640 "${STAGING_DIR}/config.json"
 chmod 700 "${STAGING_DIR}/state" "${STAGING_DIR}/logs"
 
 log "Activating the prepared release..."
