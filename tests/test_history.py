@@ -20,7 +20,7 @@ def test_history_appends_json_and_csv(tmp_path):
     changes = store.append(snapshot)
 
     assert changes["daily"].amount_usd == 2.0
-    with (tmp_path / "history.csv").open(encoding="utf-8", newline="") as handle:
+    with (tmp_path / "history-2026.csv").open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[0]["timestamp"] == "2026-07-24T00:00:00+00:00"
     assert rows[0]["hourly"] == "1.0"

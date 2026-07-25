@@ -15,6 +15,28 @@ class Period(str, Enum):
     MONTHLY = "monthly"
 
 
+class ReportStatus(str, Enum):
+    """Overall report status used for Discord embed color selection."""
+
+    NORMAL = "normal"
+    ATTENTION = "attention"
+    WARNING = "warning"
+    RECORD = "record"
+
+
+@dataclass(frozen=True)
+class GpuAvailability:
+    """Current GPU rental availability summary."""
+
+    total: int
+    rented: int
+
+    @property
+    def all_available(self) -> bool:
+        """Return true when no GPUs appear to be rented."""
+        return self.total > 0 and self.rented == 0
+
+
 @dataclass(frozen=True)
 class RevenueSnapshot:
     """Revenue values at a point in time."""
@@ -24,6 +46,7 @@ class RevenueSnapshot:
     daily_usd: float
     weekly_usd: float
     monthly_usd: float
+    gpu_availability: GpuAvailability | None = None
 
     def value_for(self, period: Period) -> float:
         """Return the USD value for a period."""

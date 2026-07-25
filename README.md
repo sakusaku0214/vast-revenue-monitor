@@ -5,13 +5,13 @@ Production-ready Python 3.12+ service for monitoring Vast.ai revenue and posting
 ## Features
 
 - Hourly, daily, weekly, and monthly revenue reporting.
-- Live USDJPY conversion with persistent fallback cache.
+- Live USDJPY conversion using three providers with persistent fallback cache.
 - Professional Discord embeds with amount and percentage changes.
 - Persistent records for highest hourly, daily, weekly, and monthly revenue.
 - Gold Discord embed and `🎉 NEW RECORD` when a record is broken.
 - Daily business goal tracking for a 09:00 JST to 09:00 JST business day.
 - Adaptive weekly reset learner for the Saturday around 09:00 JST reset window.
-- Rotating logs, JSON state files, and CSV history export for forecasting.
+- 30-day compressed log rotation, JSON state files, and yearly CSV history export.
 - Modular architecture prepared for Prometheus, Grafana, Slack, LINE, web UI, SQLite, and PostgreSQL extensions.
 
 ## Installation on Ubuntu 24.04 LTS
@@ -36,7 +36,7 @@ Copy `config.example.json` to `config.json` for local development. Configure:
 - `vast_api_key`: Vast.ai API key.
 - `daily_goal_usd`: Daily revenue target, default `120`.
 - `timezone`: IANA timezone, default `Asia/Tokyo`.
-- `exchange_api_url`: USD exchange-rate endpoint returning `rates.JPY`.
+- `exchange_api_urls`: ordered USDJPY provider URLs; each must return `rates.JPY` or `conversion_rates.JPY`.
 - `log_level`: `DEBUG`, `INFO`, `WARNING`, or `ERROR`.
 
 ## Usage
@@ -59,10 +59,10 @@ python balance.py --config config.json
 
 ## State files
 
-The service automatically creates JSON files under `state/`:
+The service automatically creates state files under `state/`:
 
 - `history.json`
-- `history.csv`
+- `history-YYYY.csv`
 - `records.json`
 - `weekly_reset.json`
 - `exchange_rate.json`
@@ -74,6 +74,40 @@ The service automatically creates JSON files under `state/`:
 sudo systemctl status vast-balance.service
 sudo systemctl restart vast-balance.service
 sudo journalctl -u vast-balance.service -f
+```
+
+## Upgrade procedure
+
+```bash
+cd /path/to/vast-revenue-monitor
+git pull
+sudo ./install.sh
+sudo systemctl restart vast-balance.service
+```
+
+Before upgrading, back up `/opt/vast-revenue-monitor/config.json` and the `state/` directory. The installer preserves an existing `config.json`, recreates the virtual environment, reinstalls dependencies, reloads systemd, and restarts the service.
+
+## Backup and restore
+
+Create a backup:
+
+```bash
+sudo systemctl stop vast-balance.service
+sudo tar -czf vast-revenue-monitor-backup.tar.gz \
+  -C /opt/vast-revenue-monitor config.json state logs
+sudo systemctl start vast-balance.service
+```
+
+Restore a backup:
+
+```bash
+sudo systemctl stop vast-balance.service
+sudo tar -xzf vast-revenue-monitor-backup.tar.gz -C /opt/vast-revenue-monitor
+sudo chown -R vast-revenue-monitor:vast-revenue-monitor \
+  /opt/vast-revenue-monitor/config.json \
+  /opt/vast-revenue-monitor/state \
+  /opt/vast-revenue-monitor/logs
+sudo systemctl start vast-balance.service
 ```
 
 ## Troubleshooting

@@ -11,7 +11,7 @@ from src.exchange_rate import ExchangeRateProvider
 from src.goal_tracker import GoalTracker
 from src.history import HistoryStore
 from src.records import RecordsStore
-from src.vast_api import VastApiClient
+from src.vast_api import VastApiClient, VastApiSchemaError
 from src.weekly_reset import WeeklyResetLearner
 
 LOGGER = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class RevenueMonitor:
             config.log_dir / "api_response.json",
         )
         self._exchange = ExchangeRateProvider(
-            config.exchange.url,
+            config.exchange.urls,
             config.state_dir / "exchange_rate.json",
             config.exchange.timeout_seconds,
         )
@@ -51,7 +51,12 @@ class RevenueMonitor:
 
     def run_once(self) -> None:
         """Execute one report cycle."""
-        snapshot = self._vast.get_revenue_snapshot()
+        try:
+            snapshot = self._vast.get_revenue_snapshot()
+        except VastApiSchemaError as exc:
+            LOGGER.exception("Vast.ai API schema parsing failed")
+            self._discord.send_schema_alert(str(exc))
+            raise
         rate = self._exchange.get_usdjpy()
         previous_weekly = self._history.latest_weekly_usd()
         should_check_reset = (

@@ -11,11 +11,11 @@ CSV_HEADER = ["timestamp", "hourly", "daily", "weekly", "monthly"]
 
 
 class HistoryStore:
-    """Append-only JSON and CSV history store for reports."""
+    """Append-only JSON history plus yearly rotated CSV exports."""
 
-    def __init__(self, path: Path, csv_path: Path | None = None) -> None:
+    def __init__(self, path: Path, csv_dir: Path | None = None) -> None:
         self._path = path
-        self._csv_path = csv_path or path.with_suffix(".csv")
+        self._csv_dir = csv_dir or path.parent
 
     def latest_weekly_usd(self) -> float | None:
         """Return the latest stored weekly revenue value."""
@@ -31,17 +31,21 @@ class HistoryStore:
         entry = self._entry(snapshot)
         history.append(entry)
         write_json(self._path, history[-5000:])
-        self._append_csv(entry)
+        self._append_csv(entry, snapshot.timestamp.year)
         return self._changes(snapshot, previous)
 
-    def _append_csv(self, entry: dict[str, float | str]) -> None:
-        ensure_directory(self._csv_path.parent)
-        needs_header = not self._csv_path.exists() or self._csv_path.stat().st_size == 0
-        with self._csv_path.open("a", encoding="utf-8", newline="") as handle:
+    def _append_csv(self, entry: dict[str, float | str], year: int) -> None:
+        csv_path = self._csv_path(year)
+        ensure_directory(csv_path.parent)
+        needs_header = not csv_path.exists() or csv_path.stat().st_size == 0
+        with csv_path.open("a", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=CSV_HEADER)
             if needs_header:
                 writer.writeheader()
             writer.writerow(entry)
+
+    def _csv_path(self, year: int) -> Path:
+        return self._csv_dir / f"history-{year}.csv"
 
     @staticmethod
     def _entry(snapshot: RevenueSnapshot) -> dict[str, float | str]:

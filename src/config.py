@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+DEFAULT_EXCHANGE_API_URLS = (
+    "https://open.er-api.com/v6/latest/USD",
+    "https://api.frankfurter.app/latest?from=USD&to=JPY",
+    "https://api.exchangerate.host/latest?base=USD&symbols=JPY",
+)
+
 
 @dataclass(frozen=True)
 class VastConfig:
@@ -19,7 +25,7 @@ class VastConfig:
 class ExchangeConfig:
     """Exchange-rate provider configuration."""
 
-    url: str = "https://open.er-api.com/v6/latest/USD"
+    urls: tuple[str, ...]
     timeout_seconds: int = 15
 
 
@@ -58,12 +64,7 @@ class AppConfig:
             daily_goal_usd=float(raw.get("daily_goal_usd", 120.0)),
             timezone=ZoneInfo(str(raw.get("timezone", "Asia/Tokyo"))),
             exchange=ExchangeConfig(
-                url=str(
-                    raw.get(
-                        "exchange_api_url",
-                        "https://open.er-api.com/v6/latest/USD",
-                    )
-                ),
+                urls=cls._exchange_urls(raw),
                 timeout_seconds=int(raw.get("exchange_timeout_seconds", 15)),
             ),
             log_level=str(raw.get("log_level", "INFO")),
@@ -71,3 +72,13 @@ class AppConfig:
             log_dir=Path(str(raw.get("log_dir", "logs"))),
             request_timeout_seconds=int(raw.get("request_timeout_seconds", 30)),
         )
+
+    @staticmethod
+    def _exchange_urls(raw: dict[str, object]) -> tuple[str, ...]:
+        configured = raw.get("exchange_api_urls")
+        if isinstance(configured, list) and configured:
+            return tuple(str(url) for url in configured)
+        legacy_url = raw.get("exchange_api_url")
+        if legacy_url:
+            return (str(legacy_url), *DEFAULT_EXCHANGE_API_URLS[1:])
+        return DEFAULT_EXCHANGE_API_URLS

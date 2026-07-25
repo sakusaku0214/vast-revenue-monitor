@@ -8,10 +8,14 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from src.models import Change, GoalStatus, Period, RecordBreak, RevenueSnapshot
+from src.models import Change, GoalStatus, Period, RecordBreak, ReportStatus, RevenueSnapshot
 
-GOLD = 0xD4AF37
-BLUE = 0x2F80ED
+COLOR_BY_STATUS = {
+    ReportStatus.NORMAL: 0x2ECC71,
+    ReportStatus.ATTENTION: 0xF1C40F,
+    ReportStatus.WARNING: 0xE74C3C,
+    ReportStatus.RECORD: 0xD4AF37,
+}
 
 
 @dataclass(frozen=True)
@@ -30,6 +34,23 @@ class DiscordNotifier:
         goal: GoalStatus,
     ) -> None:
         """Send an hourly revenue report."""
+        status = self._report_status(snapshot, records, goal)
+        self._post_embed(self._embed(snapshot, usdjpy, changes, records, goal, status))
+
+    def send_schema_alert(self, message: str) -> None:
+        """Notify Discord that the Vast.ai API schema could not be parsed."""
+        self._post_embed({
+            "title": "⚠️ Vast.ai API Schema Alert",
+            "color": COLOR_BY_STATUS[ReportStatus.WARNING],
+            "description": message,
+            "fields": [{
+                "name": "Action required",
+                "value": "Enable DEBUG logging and inspect `logs/api_response.json`.",
+                "inline": False,
+            }],
+        })
+
+    def _post_embed(self, embed: dict[str, Any]) -> None:
         session = requests.Session()
         retry = Retry(
             total=4,
@@ -40,7 +61,7 @@ class DiscordNotifier:
         session.mount("https://", HTTPAdapter(max_retries=retry))
         response = session.post(
             self.webhook_url,
-            json={"embeds": [self._embed(snapshot, usdjpy, changes, records, goal)]},
+            json={"embeds": [embed]},
             timeout=self.timeout_seconds,
         )
         response.raise_for_status()
@@ -52,13 +73,17 @@ class DiscordNotifier:
         changes: dict[str, Change],
         records: dict[Period, RecordBreak],
         goal: GoalStatus,
+        status: ReportStatus,
     ) -> dict[str, Any]:
         fields = self._performance_fields(snapshot, usdjpy, changes)
         fields.append(self._goal_field(goal))
+        warning = self._gpu_warning_field(snapshot)
+        if warning:
+            fields.append(warning)
         fields.extend(self._record_fields(records))
         return {
-            "title": self._title(records),
-            "color": GOLD if records else BLUE,
+            "title": self._title(records, status),
+            "color": COLOR_BY_STATUS[status],
             "description": f"Performance at {snapshot.timestamp.isoformat()}",
             "fields": fields,
             "footer": {"text": f"USDJPY {usdjpy:.4f}"},
@@ -90,6 +115,20 @@ class DiscordNotifier:
                 f"{pace_label}: {goal.pace_delta_percent:+.1f}%\n"
                 f"Estimated final: ${goal.estimated_final_usd:,.2f}\n"
                 f"Status: {'On Track' if goal.on_track else 'Behind Pace'}"
+            ),
+            "inline": False,
+        }
+
+    @staticmethod
+    def _gpu_warning_field(snapshot: RevenueSnapshot) -> dict[str, Any] | None:
+        availability = snapshot.gpu_availability
+        if availability is None or not availability.all_available:
+            return None
+        return {
+            "name": "⚠️ All GPUs Available",
+            "value": (
+                f"Detected {availability.total} configured GPU(s) with no active rentals. "
+                "Check pricing, host health, and Vast.ai listing status."
             ),
             "inline": False,
         }
@@ -127,7 +166,25 @@ class DiscordNotifier:
         }
 
     @staticmethod
-    def _title(records: dict[Period, RecordBreak]) -> str:
+    def _report_status(
+        snapshot: RevenueSnapshot,
+        records: dict[Period, RecordBreak],
+        goal: GoalStatus,
+    ) -> ReportStatus:
+        if records:
+            return ReportStatus.RECORD
+        if snapshot.gpu_availability and snapshot.gpu_availability.all_available:
+            return ReportStatus.WARNING
+        if not goal.on_track:
+            return ReportStatus.ATTENTION
+        return ReportStatus.NORMAL
+
+    @staticmethod
+    def _title(records: dict[Period, RecordBreak], status: ReportStatus) -> str:
         if records:
             return "🎉 NEW RECORD — Vast.ai Revenue Report"
+        if status is ReportStatus.WARNING:
+            return "⚠️ Vast.ai Revenue Report"
+        if status is ReportStatus.ATTENTION:
+            return "注意 — Vast.ai Revenue Report"
         return "Vast.ai Revenue Report"

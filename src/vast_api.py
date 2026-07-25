@@ -10,10 +10,14 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from src.models import RevenueSnapshot
+from src.models import GpuAvailability, RevenueSnapshot
 from src.utils import write_json
 
 LOGGER = logging.getLogger(__name__)
+
+
+class VastApiSchemaError(ValueError):
+    """Raised when the Vast.ai revenue response cannot be parsed safely."""
 
 
 class VastApiClient:
@@ -60,13 +64,16 @@ class VastApiClient:
                 monthly_usd=self._number(
                     revenue, ("monthly", "monthly_revenue", "earn_month")
                 ),
+                gpu_availability=self._gpu_availability(data),
             )
         except (KeyError, TypeError, ValueError) as exc:
             LOGGER.error(
                 "Unable to parse Vast.ai revenue response. "
                 "Enable DEBUG logging and inspect logs/api_response.json."
             )
-            raise ValueError("Vast.ai revenue response structure is unsupported") from exc
+            raise VastApiSchemaError(
+                "Vast.ai revenue response structure is unsupported"
+            ) from exc
 
     def _get_json(self, endpoint: str) -> dict[str, Any]:
         url = f"{self._base_url}{endpoint}"
@@ -77,7 +84,7 @@ class VastApiClient:
         if LOGGER.isEnabledFor(logging.DEBUG):
             write_json(self._debug_response_path, payload)
         if not isinstance(payload, dict):
-            raise ValueError("Vast.ai response was not a JSON object")
+            raise VastApiSchemaError("Vast.ai response was not a JSON object")
         return payload
 
     @staticmethod
@@ -89,3 +96,53 @@ class VastApiClient:
             if isinstance(value, int | float | str):
                 return float(value)
         raise KeyError(f"Missing revenue field; tried {', '.join(keys)}")
+
+    @staticmethod
+    def _gpu_availability(data: dict[str, Any]) -> GpuAvailability | None:
+        for key in ("machines", "instances", "offers"):
+            value = data.get(key)
+            if isinstance(value, list) and value:
+                return VastApiClient._availability_from_items(value)
+        total = VastApiClient._optional_int(data, ("total_gpus", "gpu_total"))
+        rented = VastApiClient._optional_int(data, ("rented_gpus", "gpu_rented"))
+        if total is not None and rented is not None:
+            return GpuAvailability(total=total, rented=rented)
+        return None
+
+    @staticmethod
+    def _availability_from_items(items: list[Any]) -> GpuAvailability:
+        total = 0
+        rented = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            count = VastApiClient._item_gpu_count(item)
+            total += count
+            if VastApiClient._item_is_rented(item):
+                rented += count
+        return GpuAvailability(total=total, rented=rented)
+
+    @staticmethod
+    def _item_gpu_count(item: dict[str, Any]) -> int:
+        for key in ("num_gpus", "gpu_count", "gpus"):
+            value = item.get(key)
+            if isinstance(value, int | float | str):
+                return max(int(value), 0)
+        return 1
+
+    @staticmethod
+    def _item_is_rented(item: dict[str, Any]) -> bool:
+        for key in ("rented", "in_use", "is_rented"):
+            value = item.get(key)
+            if isinstance(value, bool):
+                return value
+        status = item.get("status") or item.get("machine_status")
+        return str(status).lower() in {"running", "rented", "occupied"}
+
+    @staticmethod
+    def _optional_int(data: dict[str, Any], keys: tuple[str, ...]) -> int | None:
+        for key in keys:
+            value = data.get(key)
+            if isinstance(value, int | float | str):
+                return int(value)
+        return None

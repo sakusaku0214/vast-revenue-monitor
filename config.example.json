@@ -1,11 +1,24 @@
 {
+  "_comment_credentials": "Required: replace both placeholders before starting the service.",
   "discord_webhook_url": "https://discord.com/api/webhooks/REPLACE_ME/REPLACE_ME",
   "vast_api_key": "REPLACE_ME",
+
+  "_comment_vast": "vast_base_url is configurable for API migrations or proxies; keep default unless needed.",
   "vast_base_url": "https://console.vast.ai/api/v0",
+
+  "_comment_goal": "Daily goal is evaluated on a business day from 09:00 JST to 09:00 JST next day.",
   "daily_goal_usd": 120.0,
   "timezone": "Asia/Tokyo",
-  "exchange_api_url": "https://open.er-api.com/v6/latest/USD",
+
+  "_comment_exchange": "Three USDJPY providers are tried in order; the last successful rate is cached.",
+  "exchange_api_urls": [
+    "https://open.er-api.com/v6/latest/USD",
+    "https://api.frankfurter.app/latest?from=USD&to=JPY",
+    "https://api.exchangerate.host/latest?base=USD&symbols=JPY"
+  ],
   "exchange_timeout_seconds": 15,
+
+  "_comment_runtime": "Set log_level to DEBUG to save the latest Vast.ai payload to logs/api_response.json.",
   "request_timeout_seconds": 30,
   "log_level": "INFO",
   "state_dir": "state",
