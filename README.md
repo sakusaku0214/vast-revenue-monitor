@@ -11,7 +11,7 @@ Production-ready Python 3.12+ service for monitoring Vast.ai revenue and posting
 - Gold Discord embed and `🎉 NEW RECORD` when a record is broken.
 - Daily business goal tracking for a 09:00 JST to 09:00 JST business day.
 - Adaptive weekly reset learner for the Saturday around 09:00 JST reset window.
-- Rotating logs and JSON state files.
+- Rotating logs, JSON state files, and CSV history export for forecasting.
 - Modular architecture prepared for Prometheus, Grafana, Slack, LINE, web UI, SQLite, and PostgreSQL extensions.
 
 ## Installation on Ubuntu 24.04 LTS
@@ -62,6 +62,7 @@ python balance.py --config config.json
 The service automatically creates JSON files under `state/`:
 
 - `history.json`
+- `history.csv`
 - `records.json`
 - `weekly_reset.json`
 - `exchange_rate.json`
@@ -81,6 +82,7 @@ sudo journalctl -u vast-balance.service -f
 - Use `log_level: "DEBUG"` for more API and scheduler diagnostics.
 - Check `logs/vast-revenue-monitor.log` and `journalctl -u vast-balance.service`.
 - If exchange-rate API is down, ensure `state/exchange_rate.json` contains a previous successful rate.
+- If Vast.ai parsing fails, set `log_level` to `DEBUG` and inspect `logs/api_response.json`.
 
 ## Screenshots
 
@@ -89,3 +91,9 @@ sudo journalctl -u vast-balance.service -f
 ## Development notes
 
 The code separates configuration, API clients, notification rendering, state persistence, records, goals, and scheduling. New integrations should depend on domain models rather than concrete storage or notification implementations.
+
+Run tests locally with:
+
+```bash
+pytest
+```

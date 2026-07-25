@@ -26,6 +26,7 @@ class RevenueMonitor:
             config.vast.api_key,
             config.vast.base_url,
             config.request_timeout_seconds,
+            config.log_dir / "api_response.json",
         )
         self._exchange = ExchangeRateProvider(
             config.exchange.url,

@@ -22,7 +22,12 @@ class ExchangeRateProvider:
         self._cache_path = cache_path
         self._timeout = timeout_seconds
         self._session = requests.Session()
-        retry = Retry(total=4, backoff_factor=1, status_forcelist=(429, 500, 502, 503, 504))
+        retry = Retry(
+            total=4,
+            backoff_factor=1,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET",),
+        )
         self._session.mount("https://", HTTPAdapter(max_retries=retry))
         self._session.mount("http://", HTTPAdapter(max_retries=retry))
 
@@ -38,7 +43,7 @@ class ExchangeRateProvider:
                 {"rate": rate, "timestamp": datetime.now(timezone.utc).isoformat()},
             )
             return rate
-        except Exception as exc:  # noqa: BLE001 - fallback cache is intentional boundary
+        except Exception as exc:  # noqa: BLE001 - fallback cache is boundary
             LOGGER.warning("Exchange API failed; using cached USDJPY if available: %s", exc)
             cached = read_json(self._cache_path, lambda: {"rate": 0.0, "timestamp": None})
             rate = float(cached.get("rate", 0.0))

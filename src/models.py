@@ -16,14 +16,6 @@ class Period(str, Enum):
 
 
 @dataclass(frozen=True)
-class Money:
-    """A USD amount with a JPY conversion."""
-
-    usd: float
-    jpy: float
-
-
-@dataclass(frozen=True)
 class RevenueSnapshot:
     """Revenue values at a point in time."""
 
@@ -52,12 +44,24 @@ class Change:
 
 
 @dataclass(frozen=True)
+class RecordBreak:
+    """Details for a newly broken revenue record."""
+
+    period: Period
+    previous_best_usd: float
+    current_usd: float
+    improvement_percent: float
+
+
+@dataclass(frozen=True)
 class GoalStatus:
     """Daily business goal progress."""
 
     progress_usd: float
     remaining_usd: float
-    percent: float
+    current_percent: float
+    expected_percent: float
+    pace_delta_percent: float
     estimated_final_usd: float
     on_track: bool
     business_day_start: datetime

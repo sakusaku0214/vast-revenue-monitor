@@ -1,17 +1,21 @@
 """Persistent revenue history."""
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 from src.models import Change, Period, RevenueSnapshot
-from src.utils import read_json, utc_iso, write_json
+from src.utils import ensure_directory, read_json, utc_iso, write_json
+
+CSV_HEADER = ["timestamp", "hourly", "daily", "weekly", "monthly"]
 
 
 class HistoryStore:
-    """Append-only JSON history store for reports."""
+    """Append-only JSON and CSV history store for reports."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, csv_path: Path | None = None) -> None:
         self._path = path
+        self._csv_path = csv_path or path.with_suffix(".csv")
 
     def latest_weekly_usd(self) -> float | None:
         """Return the latest stored weekly revenue value."""
@@ -24,16 +28,30 @@ class HistoryStore:
         """Append a snapshot and return changes versus the previous snapshot."""
         history = read_json(self._path, lambda: [])
         previous = history[-1] if history else None
-        entry = {
+        entry = self._entry(snapshot)
+        history.append(entry)
+        write_json(self._path, history[-5000:])
+        self._append_csv(entry)
+        return self._changes(snapshot, previous)
+
+    def _append_csv(self, entry: dict[str, float | str]) -> None:
+        ensure_directory(self._csv_path.parent)
+        needs_header = not self._csv_path.exists() or self._csv_path.stat().st_size == 0
+        with self._csv_path.open("a", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=CSV_HEADER)
+            if needs_header:
+                writer.writeheader()
+            writer.writerow(entry)
+
+    @staticmethod
+    def _entry(snapshot: RevenueSnapshot) -> dict[str, float | str]:
+        return {
             "timestamp": utc_iso(snapshot.timestamp),
             "hourly": snapshot.hourly_usd,
             "daily": snapshot.daily_usd,
             "weekly": snapshot.weekly_usd,
             "monthly": snapshot.monthly_usd,
         }
-        history.append(entry)
-        write_json(self._path, history[-5000:])
-        return self._changes(snapshot, previous)
 
     @staticmethod
     def _changes(
