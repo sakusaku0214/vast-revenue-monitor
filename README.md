@@ -85,7 +85,11 @@ sudo ./install.sh
 sudo systemctl restart vast-balance.service
 ```
 
-Before upgrading, back up `/opt/vast-revenue-monitor/config.json` and the `state/` directory. The installer preserves an existing `config.json`, recreates the virtual environment, reinstalls dependencies, reloads systemd, and restarts the service.
+Before upgrading, back up `/opt/vast-revenue-monitor/config.json` and the `state/`
+directory. The installer stops the existing service before deployment, preserves
+`config.json`, `state/`, and `logs/`, recreates the virtual environment, reinstalls
+dependencies, reloads systemd, and restarts the service. Do not run two copies of
+the monitor against the same state directory; a process lock rejects that setup.
 
 ## Backup and restore
 
@@ -129,5 +133,6 @@ The code separates configuration, API clients, notification rendering, state per
 Run tests locally with:
 
 ```bash
+pip install 'pytest>=8.3.2,<9'
 pytest
 ```

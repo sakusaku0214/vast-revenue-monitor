@@ -52,19 +52,25 @@ class DiscordNotifier:
 
     def _post_embed(self, embed: dict[str, Any]) -> None:
         session = requests.Session()
-        retry = Retry(
-            total=4,
-            backoff_factor=1,
-            status_forcelist=(429, 500, 502, 503, 504),
-            allowed_methods=("POST",),
-        )
-        session.mount("https://", HTTPAdapter(max_retries=retry))
-        response = session.post(
-            self.webhook_url,
-            json={"embeds": [embed]},
-            timeout=self.timeout_seconds,
-        )
-        response.raise_for_status()
+        try:
+            retry = Retry(
+                total=4,
+                backoff_factor=1,
+                status_forcelist=(429, 500, 502, 503, 504),
+                allowed_methods=("POST",),
+            )
+            session.mount("https://", HTTPAdapter(max_retries=retry))
+            response = session.post(
+                self.webhook_url,
+                json={"embeds": [embed]},
+                timeout=self.timeout_seconds,
+            )
+            try:
+                response.raise_for_status()
+            finally:
+                response.close()
+        finally:
+            session.close()
 
     def _embed(
         self,

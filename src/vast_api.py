@@ -82,7 +82,10 @@ class VastApiClient:
         response.raise_for_status()
         payload = response.json()
         if LOGGER.isEnabledFor(logging.DEBUG):
-            write_json(self._debug_response_path, payload)
+            try:
+                write_json(self._debug_response_path, payload)
+            except (OSError, TypeError, ValueError):
+                LOGGER.exception("Unable to persist Vast.ai debug response")
         if not isinstance(payload, dict):
             raise VastApiSchemaError("Vast.ai response was not a JSON object")
         return payload

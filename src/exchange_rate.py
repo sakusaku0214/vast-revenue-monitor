@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -52,7 +53,7 @@ class ExchangeRateProvider:
         response.raise_for_status()
         payload = response.json()
         rate = self._extract_jpy_rate(payload)
-        if rate <= 0:
+        if not math.isfinite(rate) or rate <= 0:
             raise ValueError("USDJPY rate must be positive")
         return rate
 
@@ -82,7 +83,7 @@ class ExchangeRateProvider:
         LOGGER.warning("All exchange APIs failed; using cached USDJPY if available")
         cached = read_json(self._cache_path, lambda: {"rate": 0.0, "timestamp": None})
         rate = float(cached.get("rate", 0.0))
-        if rate <= 0:
+        if not math.isfinite(rate) or rate <= 0:
             details = "; ".join(failures)
             raise RuntimeError(f"No valid cached exchange rate is available: {details}")
         return rate

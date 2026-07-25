@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 
 from src.models import Change, Period, RevenueSnapshot
@@ -43,6 +44,8 @@ class HistoryStore:
             if needs_header:
                 writer.writeheader()
             writer.writerow(entry)
+            handle.flush()
+            os.fsync(handle.fileno())
 
     def _csv_path(self, year: int) -> Path:
         return self._csv_dir / f"history-{year}.csv"

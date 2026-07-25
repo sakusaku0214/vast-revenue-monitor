@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import sys
 import types
+from importlib.util import find_spec
 
-if "requests" not in sys.modules:
+if find_spec("requests") is None:
     requests_module = types.ModuleType("requests")
     adapters_module = types.ModuleType("requests.adapters")
 
@@ -22,13 +23,16 @@ if "requests" not in sys.modules:
         def post(self, *args: object, **kwargs: object) -> object:
             raise RuntimeError("requests is not installed in this test environment")
 
+        def close(self) -> None:
+            pass
+
     adapters_module.HTTPAdapter = HTTPAdapter
     requests_module.Session = Session
     requests_module.adapters = adapters_module
     sys.modules["requests"] = requests_module
     sys.modules["requests.adapters"] = adapters_module
 
-if "urllib3.util.retry" not in sys.modules:
+if find_spec("urllib3") is None:
     urllib3_module = types.ModuleType("urllib3")
     util_module = types.ModuleType("urllib3.util")
     retry_module = types.ModuleType("urllib3.util.retry")

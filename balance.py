@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import logging
 from pathlib import Path
 
@@ -41,11 +42,17 @@ def main() -> int:
     ensure_directory(config.log_dir)
     configure_logging(config.log_dir, config.log_level)
     LOGGER.info("Starting Vast Revenue Monitor")
-    monitor = RevenueMonitor(config)
-    if args.once:
-        monitor.run_once()
-    else:
-        monitor.run_forever()
+    lock_path = config.state_dir / "monitor.lock"
+    with lock_path.open("w", encoding="utf-8") as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("Another Vast Revenue Monitor process is running") from exc
+        monitor = RevenueMonitor(config)
+        if args.once:
+            monitor.run_once()
+        else:
+            monitor.run_forever()
     return 0
 
 

@@ -1,6 +1,7 @@
 """Domain models for Vast revenue monitoring."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -47,6 +48,14 @@ class RevenueSnapshot:
     weekly_usd: float
     monthly_usd: float
     gpu_availability: GpuAvailability | None = None
+
+    def __post_init__(self) -> None:
+        """Prevent corrupt or nonsensical API values entering persistent state."""
+        if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
+            raise ValueError("Revenue timestamp must be timezone-aware")
+        values = (self.hourly_usd, self.daily_usd, self.weekly_usd, self.monthly_usd)
+        if any(not math.isfinite(value) or value < 0 for value in values):
+            raise ValueError("Revenue values must be finite and non-negative")
 
     def value_for(self, period: Period) -> float:
         """Return the USD value for a period."""

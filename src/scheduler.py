@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from src.config import AppConfig
@@ -10,6 +11,7 @@ from src.discord_embed import DiscordNotifier
 from src.exchange_rate import ExchangeRateProvider
 from src.goal_tracker import GoalTracker
 from src.history import HistoryStore
+from src.models import RevenueSnapshot
 from src.records import RecordsStore
 from src.vast_api import VastApiClient, VastApiSchemaError
 from src.weekly_reset import WeeklyResetLearner
@@ -51,12 +53,7 @@ class RevenueMonitor:
 
     def run_once(self) -> None:
         """Execute one report cycle."""
-        try:
-            snapshot = self._vast.get_revenue_snapshot()
-        except VastApiSchemaError as exc:
-            LOGGER.exception("Vast.ai API schema parsing failed")
-            self._discord.send_schema_alert(str(exc))
-            raise
+        snapshot = self._fetch_snapshot_with_alert()
         rate = self._exchange.get_usdjpy()
         previous_weekly = self._history.latest_weekly_usd()
         should_check_reset = (
@@ -80,13 +77,53 @@ class RevenueMonitor:
         self._discord.send_report(snapshot, rate, changes, records, goal)
         LOGGER.info("Sent revenue report for %s", snapshot.timestamp.isoformat())
 
-    def run_forever(self) -> None:
-        """Run continuously, attempting a report near the top of every hour."""
-        while True:
+    def _fetch_snapshot_with_alert(self) -> RevenueSnapshot:
+        """Fetch a snapshot and make a best-effort schema-change notification."""
+        try:
+            return self._vast.get_revenue_snapshot()
+        except VastApiSchemaError as exc:
+            LOGGER.exception("Vast.ai API schema parsing failed")
             try:
-                self.run_once()
-            except Exception:
-                LOGGER.exception("Revenue report cycle failed")
+                self._discord.send_schema_alert(str(exc))
+            except Exception:  # noqa: BLE001 - preserve the primary API failure
+                LOGGER.exception("Unable to send Vast.ai schema alert to Discord")
+            raise
+
+    def run_forever(self) -> None:
+        """Report hourly and perform reset probes at configured minute windows."""
+        self._run_safely(self.run_once, "Initial revenue report failed")
+        while True:
             now = datetime.now(timezone.utc)
-            sleep_seconds = 3600 - (now.minute * 60 + now.second)
-            time.sleep(max(sleep_seconds, 60))
+            sleep_seconds = 60 - now.second - now.microsecond / 1_000_000
+            time.sleep(max(sleep_seconds, 1.0))
+            now = datetime.now(timezone.utc)
+            if now.minute == 0:
+                self._run_safely(self.run_once, "Revenue report cycle failed")
+            else:
+                self._run_safely(
+                    lambda: self._probe_weekly_reset(now),
+                    "Weekly reset probe failed",
+                )
+
+    def _probe_weekly_reset(self, now: datetime) -> None:
+        """Fetch a lightweight observation only inside a reset scan window."""
+        if not self._weekly_reset.should_monitor(now):
+            return
+        previous = self._history.latest_weekly_usd()
+        if previous is None:
+            LOGGER.debug("Skipping reset probe because no history exists")
+            return
+        snapshot = self._fetch_snapshot_with_alert()
+        if self._weekly_reset.observe(previous, snapshot.weekly_usd, snapshot.timestamp):
+            LOGGER.warning(
+                "Detected weekly revenue reset at %s",
+                snapshot.timestamp.isoformat(),
+            )
+
+    @staticmethod
+    def _run_safely(action: Callable[[], None], failure_message: str) -> None:
+        """Run a scheduled callable without terminating the service loop."""
+        try:
+            action()
+        except Exception:  # noqa: BLE001 - long-running scheduler boundary
+            LOGGER.exception(failure_message)
