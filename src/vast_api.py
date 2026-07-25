@@ -29,12 +29,18 @@ class VastApiClient:
         base_url: str,
         timeout_seconds: int,
         debug_response_path: Path,
+        revenue_endpoint: str = "/machines/",
+        auth_mode: str = "query",
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._revenue_endpoint = revenue_endpoint
+        self._api_key = api_key
+        self._auth_mode = auth_mode
         self._timeout = timeout_seconds
         self._debug_response_path = debug_response_path
         self._session = requests.Session()
-        self._session.headers.update({"Authorization": f"Bearer {api_key}"})
+        if auth_mode == "bearer":
+            self._session.headers.update({"Authorization": f"Bearer {api_key}"})
         retry = Retry(
             total=4,
             backoff_factor=1,
@@ -46,24 +52,23 @@ class VastApiClient:
 
     def get_revenue_snapshot(self) -> RevenueSnapshot:
         """Fetch the current revenue snapshot from Vast.ai."""
-        data = self._get_json("/users/current")
+        data = self._get_json(self._revenue_endpoint)
         now = datetime.now(timezone.utc)
         revenue = data.get("revenue") or data.get("earnings") or data
         try:
+            try:
+                amounts = self._period_amounts(revenue)
+            except KeyError:
+                machines = data.get("machines")
+                if not isinstance(machines, list):
+                    raise
+                amounts = self._sum_machine_revenue(machines)
             return RevenueSnapshot(
                 timestamp=now,
-                hourly_usd=self._number(
-                    revenue, ("hourly", "hourly_revenue", "earn_hour")
-                ),
-                daily_usd=self._number(
-                    revenue, ("daily", "daily_revenue", "earn_day")
-                ),
-                weekly_usd=self._number(
-                    revenue, ("weekly", "weekly_revenue", "earn_week")
-                ),
-                monthly_usd=self._number(
-                    revenue, ("monthly", "monthly_revenue", "earn_month")
-                ),
+                hourly_usd=amounts["hourly"],
+                daily_usd=amounts["daily"],
+                weekly_usd=amounts["weekly"],
+                monthly_usd=amounts["monthly"],
                 gpu_availability=self._gpu_availability(data),
             )
         except (KeyError, TypeError, ValueError) as exc:
@@ -85,14 +90,62 @@ class VastApiClient:
     def _get_json(self, endpoint: str) -> dict[str, Any]:
         url = f"{self._base_url}{endpoint}"
         LOGGER.debug("Requesting Vast.ai endpoint %s", endpoint)
-        response = self._session.get(url, timeout=self._timeout)
-        response.raise_for_status()
-        payload = response.json()
+        params = {"api_key": self._api_key} if self._auth_mode == "query" else None
+        response = self._session.get(url, params=params, timeout=self._timeout)
+        try:
+            response.raise_for_status()
+            payload = response.json()
+        finally:
+            response.close()
         if LOGGER.isEnabledFor(logging.DEBUG):
             self._persist_diagnostic(payload)
         if not isinstance(payload, dict):
             raise VastApiSchemaError("Vast.ai response was not a JSON object")
         return payload
+
+    @classmethod
+    def _sum_machine_revenue(cls, machines: list[Any]) -> dict[str, float]:
+        """Aggregate period revenue when the machines endpoint returns per-host data."""
+        keys = {
+            "hourly": ("hourly", "hourly_revenue", "earn_hour"),
+            "daily": ("daily", "daily_revenue", "earn_day"),
+            "weekly": ("weekly", "weekly_revenue", "earn_week"),
+            "monthly": ("monthly", "monthly_revenue", "earn_month"),
+        }
+        totals = {period: 0.0 for period in keys}
+        found = {period: False for period in keys}
+        if not machines:
+            raise ValueError("Machines response was empty")
+        for machine in machines:
+            source = machine.get("revenue") or machine.get("earnings") or machine
+            for period, candidates in keys.items():
+                value = cls._optional_number(source, candidates)
+                if value is not None:
+                    totals[period] += value
+                    found[period] = True
+        missing = [period for period, was_found in found.items() if not was_found]
+        if missing:
+            raise KeyError(f"Machines response lacks revenue fields: {', '.join(missing)}")
+        return totals
+
+    @classmethod
+    def _period_amounts(cls, source: Any) -> dict[str, float]:
+        """Extract all period totals from a single response object."""
+        return {
+            "hourly": cls._number(source, ("hourly", "hourly_revenue", "earn_hour")),
+            "daily": cls._number(source, ("daily", "daily_revenue", "earn_day")),
+            "weekly": cls._number(source, ("weekly", "weekly_revenue", "earn_week")),
+            "monthly": cls._number(
+                source, ("monthly", "monthly_revenue", "earn_month")
+            ),
+        }
+
+    @classmethod
+    def _optional_number(cls, data: Any, keys: tuple[str, ...]) -> float | None:
+        try:
+            return cls._number(data, keys)
+        except KeyError:
+            return None
 
     def _persist_diagnostic(self, payload: Any) -> None:
         """Persist the latest payload without hiding the original API failure."""

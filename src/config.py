@@ -21,6 +21,8 @@ class VastConfig:
 
     api_key: str
     base_url: str = "https://console.vast.ai/api/v0"
+    revenue_endpoint: str = "/machines/"
+    auth_mode: str = "query"
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,8 @@ class AppConfig:
                 base_url=str(
                     raw.get("vast_base_url", "https://console.vast.ai/api/v0")
                 ),
+                revenue_endpoint=str(raw.get("vast_revenue_endpoint", "/machines/")),
+                auth_mode=str(raw.get("vast_auth_mode", "query")),
             ),
             daily_goal_usd=float(raw.get("daily_goal_usd", 120.0)),
             timezone=ZoneInfo(str(raw.get("timezone", "Asia/Tokyo"))),
@@ -96,6 +100,10 @@ class AppConfig:
         if not webhook.path.startswith("/api/webhooks/"):
             raise ValueError("discord_webhook_url must be a Discord webhook endpoint")
         AppConfig._require_https(config.vast.base_url, "vast_base_url")
+        if not config.vast.revenue_endpoint.startswith("/"):
+            raise ValueError("vast_revenue_endpoint must start with /")
+        if config.vast.auth_mode not in {"query", "bearer"}:
+            raise ValueError("vast_auth_mode must be query or bearer")
         for url in config.exchange.urls:
             AppConfig._require_https(url, "exchange_api_urls")
         if not math.isfinite(config.daily_goal_usd) or config.daily_goal_usd <= 0:

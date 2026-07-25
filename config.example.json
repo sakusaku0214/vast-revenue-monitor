@@ -3,8 +3,10 @@
   "discord_webhook_url": "https://discord.com/api/webhooks/REPLACE_ME/REPLACE_ME",
   "vast_api_key": "REPLACE_ME",
 
-  "_comment_vast": "vast_base_url is configurable for API migrations or proxies; keep default unless needed.",
+  "_comment_vast": "The host machines API uses ?api_key= authentication. The key is passed through requests params and is never written to logs.",
   "vast_base_url": "https://console.vast.ai/api/v0",
+  "vast_revenue_endpoint": "/machines/",
+  "vast_auth_mode": "query",
 
   "_comment_goal": "Daily goal is evaluated on a business day from 09:00 JST to 09:00 JST next day.",
   "daily_goal_usd": 120.0,

@@ -166,6 +166,9 @@ Copy `config.example.json` to `config.json` for local development. Configure:
 
 - `discord_webhook_url`: Discord webhook endpoint.
 - `vast_api_key`: Vast.ai API key.
+- `vast_revenue_endpoint`: Vast.ai endpoint path, default `/machines/`.
+- `vast_auth_mode`: `query` sends the key as `?api_key=...`; `bearer` uses the
+  Authorization header. The machines endpoint defaults to `query`.
 - `daily_goal_usd`: Daily revenue target, default `120`.
 - `timezone`: IANA timezone, default `Asia/Tokyo`.
 - `exchange_api_urls`: ordered USDJPY provider URLs; each must return `rates.JPY` or `conversion_rates.JPY`.
