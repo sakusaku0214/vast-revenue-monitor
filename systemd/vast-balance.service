@@ -1,0 +1,29 @@
+[Unit]
+Description=Vast Revenue Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vast-revenue-monitor
+Group=vast-revenue-monitor
+WorkingDirectory=/opt/vast-revenue-monitor
+Environment=PYTHONUNBUFFERED=1
+UMask=0077
+ExecStart=/opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --config /opt/vast-revenue-monitor/config.json
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/opt/vast-revenue-monitor/state /opt/vast-revenue-monitor/logs
+
+[Install]
+WantedBy=multi-user.target
