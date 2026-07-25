@@ -50,5 +50,6 @@ def test_config_accepts_valid_minimal_file(tmp_path):
 
     assert config.daily_goal_usd == 120.0
     assert len(config.exchange.urls) == 3
-    assert config.vast.revenue_endpoint == "/machines/"
+    assert config.vast.revenue_endpoint == "/users/current/"
     assert config.vast.auth_mode == "query"
+    assert config.vast.balance_field == "balance"

@@ -21,8 +21,9 @@ class VastConfig:
 
     api_key: str
     base_url: str = "https://console.vast.ai/api/v0"
-    revenue_endpoint: str = "/machines/"
+    revenue_endpoint: str = "/users/current/"
     auth_mode: str = "query"
+    balance_field: str = "balance"
 
 
 @dataclass(frozen=True)
@@ -71,8 +72,9 @@ class AppConfig:
                 base_url=str(
                     raw.get("vast_base_url", "https://console.vast.ai/api/v0")
                 ),
-                revenue_endpoint=str(raw.get("vast_revenue_endpoint", "/machines/")),
+                revenue_endpoint=str(raw.get("vast_revenue_endpoint", "/users/current/")),
                 auth_mode=str(raw.get("vast_auth_mode", "query")),
+                balance_field=str(raw.get("vast_balance_field", "balance")),
             ),
             daily_goal_usd=float(raw.get("daily_goal_usd", 120.0)),
             timezone=ZoneInfo(str(raw.get("timezone", "Asia/Tokyo"))),
@@ -104,6 +106,8 @@ class AppConfig:
             raise ValueError("vast_revenue_endpoint must start with /")
         if config.vast.auth_mode not in {"query", "bearer"}:
             raise ValueError("vast_auth_mode must be query or bearer")
+        if config.vast.balance_field not in {"balance", "paid_expected"}:
+            raise ValueError("vast_balance_field must be balance or paid_expected")
         for url in config.exchange.urls:
             AppConfig._require_https(url, "exchange_api_urls")
         if not math.isfinite(config.daily_goal_usd) or config.daily_goal_usd <= 0:

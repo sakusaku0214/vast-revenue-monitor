@@ -166,15 +166,33 @@ Copy `config.example.json` to `config.json` for local development. Configure:
 
 - `discord_webhook_url`: Discord webhook endpoint.
 - `vast_api_key`: Vast.ai API key.
-- `vast_revenue_endpoint`: Vast.ai endpoint path, default `/machines/`.
+- `vast_revenue_endpoint`: Vast.ai endpoint path, default `/users/current/`.
 - `vast_auth_mode`: `query` sends the key as `?api_key=...`; `bearer` uses the
-  Authorization header. The machines endpoint defaults to `query`.
+  Authorization header. The current-user endpoint defaults to `query`.
+- `vast_balance_field`: account counter used for local revenue deltas, default
+  `balance`; advanced users may select `paid_expected` if it is monotonic for their
+  Vast.ai account.
 - `daily_goal_usd`: Daily revenue target, default `120`.
 - `timezone`: IANA timezone, default `Asia/Tokyo`.
 - `exchange_api_urls`: ordered USDJPY provider URLs; each must return `rates.JPY` or `conversion_rates.JPY`.
 - `log_level`: `DEBUG`, `INFO`, `WARNING`, or `ERROR`.
 
 ## Usage
+
+### How revenue is calculated
+
+The current-user endpoint exposes account values such as `balance`; it does not
+provide hourly, daily, weekly, and monthly revenue totals. The monitor therefore
+stores successive balance samples in `state/revenue_events.json` and counts only
+positive changes as observed revenue. Hourly, 09:00 business-day, Saturday 09:00
+weekly, and first-day 09:00 monthly totals are aggregated from those events.
+
+The first successful sample establishes a baseline and reports zero revenue. Totals
+become accurate as the service observes subsequent changes. A payout lowers the
+balance and is treated as zero revenue, but earnings and a payout occurring between
+two samples cannot be separated using this endpoint alone. Set
+`vast_balance_field` to `paid_expected` only after confirming that value increases
+monotonically for the account.
 
 Run once for validation:
 
@@ -198,6 +216,7 @@ The service automatically creates state files under `state/`:
 
 - `history.json`
 - `history-YYYY.csv`
+- `revenue_events.json`
 - `records.json`
 - `weekly_reset.json`
 - `exchange_rate.json`

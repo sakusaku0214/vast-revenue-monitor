@@ -13,6 +13,7 @@ from src.goal_tracker import GoalTracker
 from src.history import HistoryStore
 from src.models import RevenueSnapshot
 from src.records import RecordsStore
+from src.revenue import RevenueAccumulator
 from src.vast_api import VastApiClient, VastApiSchemaError
 from src.weekly_reset import WeeklyResetLearner
 
@@ -31,6 +32,7 @@ class RevenueMonitor:
             config.log_dir / "api_response.json",
             revenue_endpoint=config.vast.revenue_endpoint,
             auth_mode=config.vast.auth_mode,
+            balance_field=config.vast.balance_field,
         )
         self._exchange = ExchangeRateProvider(
             config.exchange.urls,
@@ -39,6 +41,9 @@ class RevenueMonitor:
         )
         self._history = HistoryStore(config.state_dir / "history.json")
         self._records = RecordsStore(config.state_dir / "records.json")
+        self._revenue = RevenueAccumulator(
+            config.state_dir / "revenue_events.json", config.timezone
+        )
         self._weekly_reset = WeeklyResetLearner(
             config.state_dir / "weekly_reset.json",
             config.timezone,
@@ -81,19 +86,19 @@ class RevenueMonitor:
 
     def validate_connections(self) -> None:
         """Validate required upstream APIs without posting or changing report state."""
-        snapshot = self._vast.get_revenue_snapshot()
+        sample = self._vast.get_account_balance()
         rate = self._exchange.get_usdjpy()
         self._discord.validate_webhook()
         LOGGER.info(
             "Connectivity validation succeeded at %s with USDJPY %.4f",
-            snapshot.timestamp.isoformat(),
+            sample.timestamp.isoformat(),
             rate,
         )
 
     def _fetch_snapshot_with_alert(self) -> RevenueSnapshot:
         """Fetch a snapshot and make a best-effort schema-change notification."""
         try:
-            return self._vast.get_revenue_snapshot()
+            return self._revenue.update(self._vast.get_account_balance())
         except VastApiSchemaError as exc:
             LOGGER.exception("Vast.ai API schema parsing failed")
             try:
@@ -103,35 +108,13 @@ class RevenueMonitor:
             raise
 
     def run_forever(self) -> None:
-        """Report hourly and perform reset probes at configured minute windows."""
+        """Report once at startup and near the top of each subsequent hour."""
         self._run_safely(self.run_once, "Initial revenue report failed")
         while True:
             now = datetime.now(timezone.utc)
-            sleep_seconds = 60 - now.second - now.microsecond / 1_000_000
-            time.sleep(max(sleep_seconds, 1.0))
-            now = datetime.now(timezone.utc)
-            if now.minute == 0:
-                self._run_safely(self.run_once, "Revenue report cycle failed")
-            else:
-                self._run_safely(
-                    lambda: self._probe_weekly_reset(now),
-                    "Weekly reset probe failed",
-                )
-
-    def _probe_weekly_reset(self, now: datetime) -> None:
-        """Fetch a lightweight observation only inside a reset scan window."""
-        if not self._weekly_reset.should_monitor(now):
-            return
-        previous = self._history.latest_weekly_usd()
-        if previous is None:
-            LOGGER.debug("Skipping reset probe because no history exists")
-            return
-        snapshot = self._fetch_snapshot_with_alert()
-        if self._weekly_reset.observe(previous, snapshot.weekly_usd, snapshot.timestamp):
-            LOGGER.warning(
-                "Detected weekly revenue reset at %s",
-                snapshot.timestamp.isoformat(),
-            )
+            sleep_seconds = 3600 - (now.minute * 60 + now.second)
+            time.sleep(max(sleep_seconds, 60))
+            self._run_safely(self.run_once, "Revenue report cycle failed")
 
     @staticmethod
     def _run_safely(action: Callable[[], None], failure_message: str) -> None:

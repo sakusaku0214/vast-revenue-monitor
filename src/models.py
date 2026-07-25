@@ -39,6 +39,18 @@ class GpuAvailability:
 
 
 @dataclass(frozen=True)
+class AccountBalance:
+    """A cumulative account value sampled from Vast.ai."""
+
+    timestamp: datetime
+    amount_usd: float
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.amount_usd) or self.amount_usd < 0:
+            raise ValueError("Account balance must be finite and non-negative")
+
+
+@dataclass(frozen=True)
 class RevenueSnapshot:
     """Revenue values at a point in time."""
 

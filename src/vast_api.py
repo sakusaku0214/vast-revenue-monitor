@@ -10,10 +10,22 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from src.models import GpuAvailability, RevenueSnapshot
+from src.models import AccountBalance, GpuAvailability
 from src.utils import write_json
 
 LOGGER = logging.getLogger(__name__)
+SENSITIVE_FIELDS = {
+    "api_key",
+    "crisp_hmac",
+    "discord_id",
+    "email",
+    "escalation_email",
+    "escalation_phone_number",
+    "paypal_email",
+    "phone_number",
+    "ssh_key",
+    "wise_email",
+}
 
 
 class VastApiSchemaError(ValueError):
@@ -29,13 +41,15 @@ class VastApiClient:
         base_url: str,
         timeout_seconds: int,
         debug_response_path: Path,
-        revenue_endpoint: str = "/machines/",
+        revenue_endpoint: str = "/users/current/",
         auth_mode: str = "query",
+        balance_field: str = "balance",
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._revenue_endpoint = revenue_endpoint
         self._api_key = api_key
         self._auth_mode = auth_mode
+        self._balance_field = balance_field
         self._timeout = timeout_seconds
         self._debug_response_path = debug_response_path
         self._session = requests.Session()
@@ -50,41 +64,19 @@ class VastApiClient:
         self._session.mount("https://", HTTPAdapter(max_retries=retry))
         self._session.mount("http://", HTTPAdapter(max_retries=retry))
 
-    def get_revenue_snapshot(self) -> RevenueSnapshot:
-        """Fetch the current revenue snapshot from Vast.ai."""
+    def get_account_balance(self) -> AccountBalance:
+        """Fetch the account balance used as the local revenue counter."""
         data = self._get_json(self._revenue_endpoint)
-        now = datetime.now(timezone.utc)
-        revenue = data.get("revenue") or data.get("earnings") or data
         try:
-            try:
-                amounts = self._period_amounts(revenue)
-            except KeyError:
-                machines = data.get("machines")
-                if not isinstance(machines, list):
-                    raise
-                amounts = self._sum_machine_revenue(machines)
-            return RevenueSnapshot(
-                timestamp=now,
-                hourly_usd=amounts["hourly"],
-                daily_usd=amounts["daily"],
-                weekly_usd=amounts["weekly"],
-                monthly_usd=amounts["monthly"],
-                gpu_availability=self._gpu_availability(data),
-            )
+            amount = self._number(data, (self._balance_field,))
+            if amount < 0:
+                raise ValueError("Vast.ai account balance must not be negative")
+            return AccountBalance(datetime.now(timezone.utc), amount)
         except (KeyError, TypeError, ValueError) as exc:
             self._persist_diagnostic(data)
-            top_level_keys = self._keys_for_diagnostic(data)
-            revenue_keys = self._keys_for_diagnostic(revenue)
-            LOGGER.error(
-                "Unable to parse Vast.ai revenue response; top-level keys=%s, "
-                "revenue keys=%s. Inspect %s.",
-                top_level_keys,
-                revenue_keys,
-                self._debug_response_path,
-            )
+            keys = self._keys_for_diagnostic(data)
             raise VastApiSchemaError(
-                "Vast.ai revenue response structure is unsupported; "
-                f"top-level keys: {top_level_keys}; revenue keys: {revenue_keys}"
+                f"Vast.ai response lacks numeric {self._balance_field!r}; keys: {keys}"
             ) from exc
 
     def _get_json(self, endpoint: str) -> dict[str, Any]:
@@ -103,54 +95,10 @@ class VastApiClient:
             raise VastApiSchemaError("Vast.ai response was not a JSON object")
         return payload
 
-    @classmethod
-    def _sum_machine_revenue(cls, machines: list[Any]) -> dict[str, float]:
-        """Aggregate period revenue when the machines endpoint returns per-host data."""
-        keys = {
-            "hourly": ("hourly", "hourly_revenue", "earn_hour"),
-            "daily": ("daily", "daily_revenue", "earn_day"),
-            "weekly": ("weekly", "weekly_revenue", "earn_week"),
-            "monthly": ("monthly", "monthly_revenue", "earn_month"),
-        }
-        totals = {period: 0.0 for period in keys}
-        found = {period: False for period in keys}
-        if not machines:
-            raise ValueError("Machines response was empty")
-        for machine in machines:
-            source = machine.get("revenue") or machine.get("earnings") or machine
-            for period, candidates in keys.items():
-                value = cls._optional_number(source, candidates)
-                if value is not None:
-                    totals[period] += value
-                    found[period] = True
-        missing = [period for period, was_found in found.items() if not was_found]
-        if missing:
-            raise KeyError(f"Machines response lacks revenue fields: {', '.join(missing)}")
-        return totals
-
-    @classmethod
-    def _period_amounts(cls, source: Any) -> dict[str, float]:
-        """Extract all period totals from a single response object."""
-        return {
-            "hourly": cls._number(source, ("hourly", "hourly_revenue", "earn_hour")),
-            "daily": cls._number(source, ("daily", "daily_revenue", "earn_day")),
-            "weekly": cls._number(source, ("weekly", "weekly_revenue", "earn_week")),
-            "monthly": cls._number(
-                source, ("monthly", "monthly_revenue", "earn_month")
-            ),
-        }
-
-    @classmethod
-    def _optional_number(cls, data: Any, keys: tuple[str, ...]) -> float | None:
-        try:
-            return cls._number(data, keys)
-        except KeyError:
-            return None
-
     def _persist_diagnostic(self, payload: Any) -> None:
         """Persist the latest payload without hiding the original API failure."""
         try:
-            write_json(self._debug_response_path, payload)
+            write_json(self._debug_response_path, self._redact(payload))
         except (OSError, TypeError, ValueError):
             LOGGER.exception("Unable to persist Vast.ai API diagnostic response")
 
@@ -160,6 +108,19 @@ class VastApiClient:
         if not isinstance(payload, dict):
             return []
         return sorted(str(key) for key in payload)
+
+    @classmethod
+    def _redact(cls, payload: Any) -> Any:
+        """Remove account secrets and personal information from diagnostics."""
+        if isinstance(payload, dict):
+            return {
+                str(key): "[REDACTED]" if str(key).lower() in SENSITIVE_FIELDS
+                else cls._redact(value)
+                for key, value in payload.items()
+            }
+        if isinstance(payload, list):
+            return [cls._redact(item) for item in payload]
+        return payload
 
     @staticmethod
     def _number(data: Any, keys: tuple[str, ...]) -> float:

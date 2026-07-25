@@ -21,8 +21,8 @@ def test_schema_failure_always_persists_response(monkeypatch, tmp_path):
     payload = {"unexpected": {"balance": 12.5}, "success": True}
     monkeypatch.setattr(client, "_get_json", lambda _endpoint: payload)
 
-    with pytest.raises(VastApiSchemaError, match="top-level keys"):
-        client.get_revenue_snapshot()
+    with pytest.raises(VastApiSchemaError, match="lacks numeric"):
+        client.get_account_balance()
 
     assert json.loads(diagnostic.read_text(encoding="utf-8")) == payload
     assert diagnostic.stat().st_mode & 0o777 == 0o600
@@ -37,35 +37,6 @@ def test_diagnostic_key_summary_does_not_include_values():
     assert "must-not-appear" not in str(summary)
 
 
-def test_machine_revenue_is_aggregated_and_missing_host_values_count_as_zero():
-    machines = [
-        {
-            "revenue": {
-                "hourly": 1,
-                "daily": 2,
-                "weekly": 3,
-                "monthly": 4,
-            }
-        },
-        {"machine_id": 2},
-        {
-            "earnings": {
-                "hourly_revenue": 10,
-                "daily_revenue": 20,
-                "weekly_revenue": 30,
-                "monthly_revenue": 40,
-            }
-        },
-    ]
-
-    assert VastApiClient._sum_machine_revenue(machines) == {
-        "hourly": 11,
-        "daily": 22,
-        "weekly": 33,
-        "monthly": 44,
-    }
-
-
 def test_query_auth_passes_api_key_as_request_parameter(monkeypatch, tmp_path):
     captured = {}
 
@@ -74,7 +45,7 @@ def test_query_auth_passes_api_key_as_request_parameter(monkeypatch, tmp_path):
             return None
 
         def json(self):
-            return {"hourly": 1, "daily": 2, "weekly": 3, "monthly": 4}
+            return {"balance": 4}
 
         def close(self):
             return None
@@ -101,8 +72,41 @@ def test_query_auth_passes_api_key_as_request_parameter(monkeypatch, tmp_path):
         auth_mode="query",
     )
 
-    client.get_revenue_snapshot()
+    client.get_account_balance()
 
     assert captured["url"] == "https://console.vast.ai/api/v0/machines/"
     assert captured["params"] == {"api_key": "secret"}
     assert "Authorization" not in client._session.headers
+
+
+def test_current_user_balance_is_parsed(monkeypatch, tmp_path):
+    client = VastApiClient(
+        "secret",
+        "https://console.vast.ai/api/v0",
+        5,
+        tmp_path / "response.json",
+    )
+    monkeypatch.setattr(
+        client,
+        "_get_json",
+        lambda _endpoint: {"balance": 36.8099836823924, "paid_expected": 58945.27},
+    )
+
+    assert client.get_account_balance().amount_usd == 36.8099836823924
+
+
+def test_diagnostic_redacts_personal_and_secret_fields(tmp_path):
+    client = VastApiClient("secret", "https://example.invalid", 5, tmp_path / "api.json")
+
+    client._persist_diagnostic({
+        "balance": 1.0,
+        "email": "person@example.com",
+        "rights": {"ssh_key": "private"},
+    })
+
+    saved = json.loads((tmp_path / "api.json").read_text(encoding="utf-8"))
+    assert saved == {
+        "balance": 1.0,
+        "email": "[REDACTED]",
+        "rights": {"ssh_key": "[REDACTED]"},
+    }
