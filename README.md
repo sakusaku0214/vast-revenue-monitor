@@ -16,17 +16,42 @@ Production-ready Python 3.12+ service for monitoring Vast.ai revenue and posting
 
 ## Installation on Ubuntu 24.04 LTS
 
+### Shortest interactive installation
+
+On a clean Ubuntu 24.04 server, install Git, clone the repository, and run the
+installer once. Replace `<repository-url>` with this GitHub repository's clone URL.
+
 ```bash
-git clone <repo-url> vast-revenue-monitor
+sudo apt-get update && sudo apt-get install -y git
+git clone <repository-url> vast-revenue-monitor
 cd vast-revenue-monitor
-sudo ./install.sh
+sudo bash install.sh
 ```
 
-Edit `/opt/vast-revenue-monitor/config.json` and restart:
+The installer securely prompts for the Discord webhook URL and Vast.ai API key.
+It then installs Ubuntu and Python dependencies, generates `config.json`, creates
+all directories, installs the systemd unit, enables and starts the service, and
+prints its final status. No manual virtual-environment or file-copy step is needed.
+
+For unattended installation, pass credentials through `sudo --preserve-env`:
 
 ```bash
-sudo systemctl restart vast-balance.service
+export DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/.../...'
+export VAST_API_KEY='your-vast-api-key'
+sudo --preserve-env=DISCORD_WEBHOOK_URL,VAST_API_KEY bash install.sh
+unset DISCORD_WEBHOOK_URL VAST_API_KEY
 ```
+
+Validate the host and repository without changing the system:
+
+```bash
+sudo bash install.sh --check
+```
+
+Re-running `sudo bash install.sh` performs an upgrade. An existing
+`/opt/vast-revenue-monitor/config.json`, `state/`, and `logs/` are preserved.
+The new release is prepared and validated before activation; if activation fails,
+the installer restores the previous release and restarts the previous service.
 
 ## Configuration
 
