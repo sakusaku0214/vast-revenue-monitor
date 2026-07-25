@@ -173,6 +173,10 @@ Copy `config.example.json` to `config.json` for local development. Configure:
   `balance`; advanced users may select `paid_expected` if it is monotonic for their
   Vast.ai account.
 - `daily_goal_usd`: Daily revenue target, default `120`.
+- `weekly_goal_usd`: independent weekly target, prompted during installation and
+  defaulting to `1000` USD.
+- `detailed_report`: `false` sends the compact hourly report; `true` adds changes
+  and daily-goal pace details.
 - `timezone`: IANA timezone, default `Asia/Tokyo`.
 - `exchange_api_urls`: ordered USDJPY provider URLs; each must return `rates.JPY` or `conversion_rates.JPY`.
 - `log_level`: `DEBUG`, `INFO`, `WARNING`, or `ERROR`.
@@ -194,6 +198,12 @@ archived in the reset event and the new balance is counted from zero, so earning
 between 09:00 and the first post-reset sample are retained. Null, string, or boolean
 balances are rejected before state is changed. `paid_expected` and `paid_verified`
 are not used by default.
+
+The default compact Discord report contains Hourly, Daily, and current Vast
+`balance` as Weekly revenue; an independent Weekly Goal; all-time highs; USDJPY;
+and local time. New records are sent as separate small gold embeds. Set
+`detailed_report` to `true` to additionally show monthly/change and daily-goal pace
+details.
 
 Run once for validation:
 
@@ -245,7 +255,8 @@ sudo tar -czf "$HOME/vast-revenue-monitor-backup-$(date +%F).tar.gz" \
   -C /opt/vast-revenue-monitor config.json state logs
 ```
 
-Completely remove the current installation. Type `PURGE` when prompted:
+Completely remove the current installation. Answer `Y` (or press Enter) when asked
+whether logs and history should be deleted:
 
 ```bash
 cd ~/vast-revenue-monitor
@@ -269,9 +280,42 @@ sudo systemctl status vast-balance.service --no-pager
 sudo journalctl -u vast-balance.service -n 100 -l --no-pager
 ```
 
+Running `sudo bash uninstall.sh` shows the same `Delete all logs and history?
+[Y/n]` choice. `Y` completely removes all generated files, while `N` removes the
+service/runtime but preserves only `config.json` and `state/` for a later install.
 For automated environments only, `sudo bash uninstall.sh --purge --yes` skips the
-typed confirmation. Running `sudo bash uninstall.sh` without `--purge` removes the
-systemd service but deliberately preserves `/opt/vast-revenue-monitor`.
+confirmation.
+
+## Reconfigure without reinstalling
+
+```bash
+cd ~/vast-revenue-monitor
+sudo bash install.sh --reconfigure
+```
+
+This securely re-prompts for the Discord webhook and Vast.ai API key, then asks for
+the weekly goal, optional comma-separated exchange API URLs, and compact/detailed
+report mode. The configuration is atomically replaced and the service restarted.
+
+## Backup and restore commands
+
+Create a private timestamped archive containing `config.json` and the complete
+`state/` tree (records, JSON/CSV history, reset learning, and revenue events):
+
+```bash
+cd ~/vast-revenue-monitor
+sudo bash install.sh --backup
+```
+
+Restore after installing the application on the same or another machine:
+
+```bash
+sudo bash install.sh --restore /path/to/vast-revenue-monitor-backup-YYYYMMDD-HHMMSS.tar.gz
+```
+
+Restore validates archive paths, stops the service, restores private ownership and
+permissions, and restarts the service. Keep archives private because they contain
+the Discord webhook and Vast.ai API key.
 
 ## Upgrade procedure
 

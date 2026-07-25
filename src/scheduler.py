@@ -56,6 +56,9 @@ class RevenueMonitor:
         self._discord = DiscordNotifier(
             config.discord_webhook_url,
             config.request_timeout_seconds,
+            config.weekly_goal_usd,
+            config.detailed_report,
+            config.timezone.key,
         )
 
     def run_once(self) -> None:
@@ -80,8 +83,9 @@ class RevenueMonitor:
                 )
         changes = self._history.append(snapshot)
         records = self._records.update(snapshot)
+        highest = self._records.highest()
         goal = self._goal.calculate(snapshot.timestamp, snapshot.daily_usd)
-        self._discord.send_report(snapshot, rate, changes, records, goal)
+        self._discord.send_report(snapshot, rate, changes, records, goal, highest)
         LOGGER.info("Sent revenue report for %s", snapshot.timestamp.isoformat())
 
     def validate_connections(self) -> None:

@@ -48,7 +48,7 @@ def test_weekly_reset_archives_previous_week_and_counts_post_reset_balance(tmp_p
     next_sample = accumulator.update(AccountBalance(after_reset + timedelta(hours=1), 2.0))
     events = read_json(path, list)
 
-    assert old_week.weekly_usd == 50.0
+    assert old_week.weekly_usd == 150.0
     assert new_week.weekly_usd == 1.25
     assert next_sample.weekly_usd == 2.0
     assert events[-2]["completed_weekly_balance"] == 150.0

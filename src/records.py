@@ -34,3 +34,11 @@ class RecordsStore:
                 )
         write_json(self._path, records)
         return broken
+
+    def highest(self) -> dict[Period, float]:
+        """Return all persisted high-water values, including zero defaults."""
+        records = read_json(self._path, lambda: {})
+        return {
+            period: float(records.get(period.value, {}).get("amount_usd", 0.0))
+            for period in Period
+        }

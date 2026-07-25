@@ -41,6 +41,8 @@ class AppConfig:
     discord_webhook_url: str
     vast: VastConfig
     daily_goal_usd: float
+    weekly_goal_usd: float
+    detailed_report: bool
     timezone: ZoneInfo
     exchange: ExchangeConfig
     log_level: str
@@ -77,6 +79,8 @@ class AppConfig:
                 balance_field=str(raw.get("vast_balance_field", "balance")),
             ),
             daily_goal_usd=float(raw.get("daily_goal_usd", 120.0)),
+            weekly_goal_usd=float(raw.get("weekly_goal_usd", 1000.0)),
+            detailed_report=cls._boolean(raw.get("detailed_report", False)),
             timezone=ZoneInfo(str(raw.get("timezone", "Asia/Tokyo"))),
             exchange=ExchangeConfig(
                 urls=cls._exchange_urls(raw),
@@ -112,6 +116,8 @@ class AppConfig:
             AppConfig._require_https(url, "exchange_api_urls")
         if not math.isfinite(config.daily_goal_usd) or config.daily_goal_usd <= 0:
             raise ValueError("daily_goal_usd must be a positive finite number")
+        if not math.isfinite(config.weekly_goal_usd) or config.weekly_goal_usd <= 0:
+            raise ValueError("weekly_goal_usd must be a positive finite number")
         if not 1 <= config.request_timeout_seconds <= 300:
             raise ValueError("request_timeout_seconds must be between 1 and 300")
         if not 1 <= config.exchange.timeout_seconds <= 300:
@@ -134,3 +140,9 @@ class AppConfig:
         if legacy_url:
             return (str(legacy_url), *DEFAULT_EXCHANGE_API_URLS[1:])
         return DEFAULT_EXCHANGE_API_URLS
+
+    @staticmethod
+    def _boolean(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        raise ValueError("detailed_report must be true or false")

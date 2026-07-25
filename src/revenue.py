@@ -53,7 +53,7 @@ class RevenueAccumulator:
             timestamp=sample.timestamp,
             hourly_usd=self._sum_since(events, sample.timestamp - timedelta(hours=1)),
             daily_usd=self._sum_since(events, day_start),
-            weekly_usd=self._sum_since(events, week_start),
+            weekly_usd=sample.amount_usd,
             monthly_usd=self._sum_since(events, month_start),
         )
 

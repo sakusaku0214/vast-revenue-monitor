@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from src import discord_embed
 from src.discord_embed import DiscordNotifier
 from src.models import Change, GoalStatus, GpuAvailability, Period, ReportStatus, RevenueSnapshot
+from src.models import RecordBreak
 
 
 def test_report_status_warns_when_all_gpus_are_available():
@@ -81,3 +82,32 @@ def test_validate_webhook_uses_get_without_posting(monkeypatch):
         "response_closed": 1,
         "session_closed": 1,
     }
+
+
+def test_simple_embed_contains_weekly_goal_and_all_time_high():
+    notifier = DiscordNotifier("https://example.invalid", 1, weekly_goal_usd=1200)
+    snapshot = RevenueSnapshot(
+        datetime(2026, 7, 25, tzinfo=timezone.utc), 10, 100, 537.13, 900
+    )
+    changes = {period.value: Change(0, 0) for period in Period}
+    goal = GoalStatus(100, 20, 80, 70, 10, 130, True, snapshot.timestamp, snapshot.timestamp)
+    highest = {period: snapshot.value_for(period) for period in Period}
+
+    embed = notifier._embed(snapshot, 150, changes, {}, goal, ReportStatus.NORMAL, highest)
+    text = "\n".join(field["value"] for field in embed["fields"])
+
+    assert embed["title"] == "💰 VAST.AI HOURLY REPORT"
+    assert "Progress: 44.8%" in text
+    assert "Remaining: $662.87" in text
+    assert "Daily Goal" not in " ".join(field["name"] for field in embed["fields"])
+
+
+def test_record_embed_is_small_and_separate():
+    record = RecordBreak(Period.DAILY, 100, 125, 25)
+
+    embed = DiscordNotifier._record_embed(record)
+
+    assert embed["title"] == "🏆 NEW DAILY RECORD"
+    assert [field["name"] for field in embed["fields"]] == [
+        "Current", "Previous", "Improvement"
+    ]

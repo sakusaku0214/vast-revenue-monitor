@@ -7,15 +7,20 @@ SERVICE_FILE="vast-balance.service"
 UNIT_PATH="/etc/systemd/system/${SERVICE_FILE}"
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DRY_RUN=false
+MODE="install"
+RESTORE_FILE=""
 STAGING_DIR=""
 BACKUP_DIR=""
 UNIT_BACKUP=""
 SERVICE_WAS_ACTIVE=false
 INSTALL_COMMITTED=false
+INSTALL_STARTED=false
 APP_ACTIVATED=false
 HAD_UNIT=false
 USER_CREATED=false
 GROUP_CREATED=false
+CONFIG_BACKUP=""
+RESTORE_ROLLBACK=""
 
 log() {
   printf '[vast-revenue-monitor] %s\n' "$*"
@@ -45,6 +50,9 @@ usage() {
 Usage: sudo bash install.sh [--check]
 
   --check   Validate the host and source tree without changing the system.
+  --reconfigure  Update credentials, weekly goal, exchange APIs, and report detail.
+  --backup       Back up config and state to a timestamped tar.gz.
+  --restore FILE Restore config and state from a backup archive.
 
 For unattended installation, set DISCORD_WEBHOOK_URL and VAST_API_KEY.
 Without them, a new installation prompts securely for both values.
@@ -54,7 +62,9 @@ EOF
 cleanup() {
   local exit_code=$?
   trap - ERR EXIT
-  if [[ "${INSTALL_COMMITTED}" != true && "${DRY_RUN}" != true ]]; then
+  if [[ "${INSTALL_COMMITTED}" != true \
+    && "${MODE}" == "install" \
+    && "${INSTALL_STARTED}" == true ]]; then
     printf '[vast-revenue-monitor] ERROR: installation failed; rolling back.\n' >&2
     if [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]]; then
       rm -rf -- "${APP_DIR}"
@@ -78,8 +88,20 @@ cleanup() {
     if [[ "${GROUP_CREATED}" == true ]]; then
       groupdel "${SERVICE_USER}" 2>/dev/null || true
     fi
+  elif [[ "${INSTALL_COMMITTED}" != true && "${MODE}" != "install" ]]; then
+    printf '[vast-revenue-monitor] ERROR: %s operation failed.\n' "${MODE}" >&2
+    if [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
+      cp -a "${CONFIG_BACKUP}" "${APP_DIR}/config.json"
+    fi
+    if [[ -n "${RESTORE_ROLLBACK}" && -f "${RESTORE_ROLLBACK}" ]]; then
+      rm -rf "${APP_DIR}/state"
+      tar -xzf "${RESTORE_ROLLBACK}" -C "${APP_DIR}"
+    fi
+    systemctl start "${SERVICE_FILE}" 2>/dev/null || true
   fi
   [[ -z "${STAGING_DIR}" ]] || rm -rf -- "${STAGING_DIR}"
+  [[ -z "${CONFIG_BACKUP}" ]] || rm -f -- "${CONFIG_BACKUP}"
+  [[ -z "${RESTORE_ROLLBACK}" ]] || rm -f -- "${RESTORE_ROLLBACK}"
   exit "${exit_code}"
 }
 
@@ -95,18 +117,112 @@ on_error() {
 trap 'on_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
 trap cleanup EXIT
 
-if [[ "${1:-}" == "--check" ]]; then
-  DRY_RUN=true
-elif [[ -n "${1:-}" ]]; then
-  usage
-  exit 2
-fi
+case "${1:-}" in
+  --check) DRY_RUN=true; MODE="check" ;;
+  --reconfigure) MODE="reconfigure" ;;
+  --backup) MODE="backup" ;;
+  --restore)
+    MODE="restore"
+    RESTORE_FILE="${2:-}"
+    [[ -n "${RESTORE_FILE}" ]] || fail "--restore requires a tar.gz path"
+    ;;
+  --help|-h) usage; INSTALL_COMMITTED=true; exit 0 ;;
+  "") ;;
+  *) usage; exit 2 ;;
+esac
 
 [[ "${EUID}" -eq 0 ]] || fail "Run as root: sudo bash install.sh"
 [[ -f "${SOURCE_DIR}/requirements.txt" ]] || fail "requirements.txt is missing"
 [[ -f "${SOURCE_DIR}/config.example.json" ]] || fail "config.example.json is missing"
 [[ -f "${SOURCE_DIR}/systemd/${SERVICE_FILE}" ]] || fail "systemd service is missing"
 [[ -f "${SOURCE_DIR}/balance.py" ]] || fail "balance.py is missing"
+
+if [[ "${MODE}" == "backup" ]]; then
+  [[ -d "${APP_DIR}" ]] || fail "application is not installed"
+  BACKUP_FILE="${PWD}/vast-revenue-monitor-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
+  tar -czf "${BACKUP_FILE}" -C "${APP_DIR}" config.json state
+  chmod 600 "${BACKUP_FILE}"
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]]; then
+    chown "${SUDO_USER}" "${BACKUP_FILE}"
+  fi
+  log "Backup created: ${BACKUP_FILE}"
+  INSTALL_COMMITTED=true
+  exit 0
+fi
+
+if [[ "${MODE}" == "restore" ]]; then
+  [[ -d "${APP_DIR}" ]] || fail "install the application before restoring"
+  [[ -f "${RESTORE_FILE}" ]] || fail "backup not found: ${RESTORE_FILE}"
+  if tar -tzf "${RESTORE_FILE}" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+    fail "backup contains unsafe paths"
+  fi
+  if tar -tvzf "${RESTORE_FILE}" | grep -Eq '^[lh]'; then
+    fail "backup contains unsupported links"
+  fi
+  RESTORE_DIR="$(mktemp -d /tmp/vast-revenue-restore.XXXXXX)"
+  tar -xzf "${RESTORE_FILE}" -C "${RESTORE_DIR}"
+  [[ -f "${RESTORE_DIR}/config.json" ]] || fail "backup has no config.json"
+  CONFIG_BACKUP="$(mktemp /tmp/vast-config.XXXXXX.json)"
+  cp -a "${APP_DIR}/config.json" "${CONFIG_BACKUP}"
+  RESTORE_ROLLBACK="$(mktemp /tmp/vast-revenue-rollback.XXXXXX.tar.gz)"
+  tar -czf "${RESTORE_ROLLBACK}" -C "${APP_DIR}" state
+  systemctl stop "${SERVICE_FILE}" 2>/dev/null || true
+  install -o root -g "${SERVICE_USER}" -m 0640 \
+    "${RESTORE_DIR}/config.json" "${APP_DIR}/config.json"
+  (cd "${APP_DIR}" && .venv/bin/python -c \
+    'from pathlib import Path; from src.config import AppConfig; AppConfig.load(Path("config.json"))')
+  rm -rf "${APP_DIR}/state"
+  install -d -o "${SERVICE_USER}" -g "${SERVICE_USER}" -m 0700 "${APP_DIR}/state"
+  [[ ! -d "${RESTORE_DIR}/state" ]] || rsync -a "${RESTORE_DIR}/state/" "${APP_DIR}/state/"
+  chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}/state"
+  rm -rf "${RESTORE_DIR}"
+  systemctl restart "${SERVICE_FILE}"
+  rm -f "${RESTORE_ROLLBACK}"; RESTORE_ROLLBACK=""
+  rm -f "${CONFIG_BACKUP}"; CONFIG_BACKUP=""
+  log "Restore completed from ${RESTORE_FILE}"
+  INSTALL_COMMITTED=true
+  exit 0
+fi
+
+if [[ "${MODE}" == "reconfigure" ]]; then
+  [[ -f "${APP_DIR}/config.json" ]] || fail "application is not installed"
+  CONFIG_BACKUP="$(mktemp /tmp/vast-config.XXXXXX.json)"
+  cp -a "${APP_DIR}/config.json" "${CONFIG_BACKUP}"
+  read_secret_twice "Discord webhook URL" DISCORD_WEBHOOK_URL
+  read_secret_twice "Vast.ai API key" VAST_API_KEY
+  read -r -p 'Weekly revenue goal (USD) [1000]: ' WEEKLY_GOAL_USD
+  WEEKLY_GOAL_USD="${WEEKLY_GOAL_USD:-1000}"
+  read -r -p 'Exchange API URLs, comma-separated [keep current]: ' EXCHANGE_API_URLS
+  read -r -p 'Detailed report? [y/N]: ' detailed_answer
+  DETAILED_REPORT=false
+  [[ "${detailed_answer:-}" =~ ^[Yy]$ ]] && DETAILED_REPORT=true
+  export DISCORD_WEBHOOK_URL VAST_API_KEY WEEKLY_GOAL_USD EXCHANGE_API_URLS DETAILED_REPORT
+  python3.12 - "${APP_DIR}/config.json" <<'PY'
+import json, os, sys, tempfile
+from pathlib import Path
+path = Path(sys.argv[1]); data = json.loads(path.read_text(encoding="utf-8"))
+data.update(discord_webhook_url=os.environ["DISCORD_WEBHOOK_URL"],
+            vast_api_key=os.environ["VAST_API_KEY"],
+            weekly_goal_usd=float(os.environ["WEEKLY_GOAL_USD"]),
+            detailed_report=os.environ["DETAILED_REPORT"] == "true")
+if os.environ["EXCHANGE_API_URLS"].strip():
+    data["exchange_api_urls"] = [u.strip() for u in os.environ["EXCHANGE_API_URLS"].split(",") if u.strip()]
+fd, name = tempfile.mkstemp(dir=path.parent); os.close(fd)
+Path(name).write_text(json.dumps(data, indent=2) + "\n")
+Path(name).chmod(0o640); Path(name).replace(path)
+PY
+  chown "root:${SERVICE_USER}" "${APP_DIR}/config.json"
+  (cd "${APP_DIR}" && .venv/bin/python -c \
+    'from pathlib import Path; from src.config import AppConfig; AppConfig.load(Path("config.json"))')
+  systemctl stop "${SERVICE_FILE}" 2>/dev/null || true
+  (cd "${APP_DIR}" && runuser --user "${SERVICE_USER}" -- \
+    .venv/bin/python balance.py --config config.json --validate)
+  systemctl restart "${SERVICE_FILE}"
+  rm -f "${CONFIG_BACKUP}"; CONFIG_BACKUP=""
+  log "Configuration updated and service restarted."
+  INSTALL_COMMITTED=true
+  exit 0
+fi
 
 if [[ "${DRY_RUN}" == true ]]; then
   command -v systemctl >/dev/null || fail "systemctl is not installed"
@@ -123,6 +239,7 @@ if [[ "${DRY_RUN}" == true ]]; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+INSTALL_STARTED=true
 log "Installing Ubuntu packages required by the service..."
 apt-get update
 apt-get install -y --no-install-recommends \
@@ -162,7 +279,12 @@ else
     [[ -t 0 ]] || fail "Set VAST_API_KEY for non-interactive installation"
     read_secret_twice "Vast.ai API key" VAST_API_KEY
   fi
-  export DISCORD_WEBHOOK_URL VAST_API_KEY
+  read -r -p 'Weekly revenue goal (USD) [1000]: ' WEEKLY_GOAL_USD
+  WEEKLY_GOAL_USD="${WEEKLY_GOAL_USD:-1000}"
+  read -r -p 'Detailed report? [y/N]: ' detailed_answer
+  DETAILED_REPORT=false
+  [[ "${detailed_answer:-}" =~ ^[Yy]$ ]] && DETAILED_REPORT=true
+  export DISCORD_WEBHOOK_URL VAST_API_KEY WEEKLY_GOAL_USD DETAILED_REPORT
   cp -- "${STAGING_DIR}/config.example.json" "${STAGING_DIR}/config.json"
   "${STAGING_DIR}/.venv/bin/python" - "${STAGING_DIR}/config.json" <<'PY'
 import json
@@ -174,6 +296,8 @@ path = Path(sys.argv[1])
 config = json.loads(path.read_text(encoding="utf-8"))
 config["discord_webhook_url"] = os.environ["DISCORD_WEBHOOK_URL"]
 config["vast_api_key"] = os.environ["VAST_API_KEY"]
+config["weekly_goal_usd"] = float(os.environ["WEEKLY_GOAL_USD"])
+config["detailed_report"] = os.environ["DETAILED_REPORT"] == "true"
 path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 PY
   unset DISCORD_WEBHOOK_URL VAST_API_KEY

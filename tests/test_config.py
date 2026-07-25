@@ -49,6 +49,8 @@ def test_config_accepts_valid_minimal_file(tmp_path):
     config = AppConfig.load(path)
 
     assert config.daily_goal_usd == 120.0
+    assert config.weekly_goal_usd == 1000.0
+    assert config.detailed_report is False
     assert len(config.exchange.urls) == 3
     assert config.vast.revenue_endpoint == "/users/current/"
     assert config.vast.auth_mode == "query"
