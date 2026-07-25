@@ -231,6 +231,48 @@ sudo systemctl restart vast-balance.service
 sudo journalctl -u vast-balance.service -f
 ```
 
+## Clean removal and fresh reinstall
+
+Back up anything needed first. A purge permanently removes `config.json`, all
+revenue history and records, logs, the virtual environment, systemd unit, and the
+service user/group. It does not uninstall shared Ubuntu packages.
+
+Optional backup:
+
+```bash
+sudo systemctl stop vast-balance.service
+sudo tar -czf "$HOME/vast-revenue-monitor-backup-$(date +%F).tar.gz" \
+  -C /opt/vast-revenue-monitor config.json state logs
+```
+
+Completely remove the current installation. Type `PURGE` when prompted:
+
+```bash
+cd ~/vast-revenue-monitor
+sudo bash uninstall.sh --purge
+```
+
+Verify that no installed service or application directory remains:
+
+```bash
+test ! -e /opt/vast-revenue-monitor && echo "application removed"
+test ! -e /etc/systemd/system/vast-balance.service && echo "unit removed"
+systemctl status vast-balance.service --no-pager || true
+```
+
+Install from scratch and enter the Discord webhook and Vast.ai API key twice:
+
+```bash
+git pull
+sudo bash install.sh
+sudo systemctl status vast-balance.service --no-pager
+sudo journalctl -u vast-balance.service -n 100 -l --no-pager
+```
+
+For automated environments only, `sudo bash uninstall.sh --purge --yes` skips the
+typed confirmation. Running `sudo bash uninstall.sh` without `--purge` removes the
+systemd service but deliberately preserves `/opt/vast-revenue-monitor`.
+
 ## Upgrade procedure
 
 ```bash
