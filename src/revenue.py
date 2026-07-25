@@ -19,18 +19,28 @@ class RevenueAccumulator:
     def update(self, sample: AccountBalance) -> RevenueSnapshot:
         """Store a sample and return revenue derived from observed balance growth."""
         events = read_json(self._path, lambda: [])
-        previous = float(events[-1]["balance"]) if events else sample.amount_usd
-        increment = max(sample.amount_usd - previous, 0.0)
-        events.append({
-            "timestamp": sample.timestamp.isoformat(),
-            "balance": sample.amount_usd,
-            "increment": increment,
-        })
-        events = events[-10000:]
-        write_json(self._path, events)
+        if not isinstance(events, list):
+            raise ValueError("Revenue events state must be a JSON array")
         local = sample.timestamp.astimezone(self._timezone)
         day_start = self._period_start(local, local.date(), time(9))
         week_start = day_start - timedelta(days=(day_start.weekday() - 5) % 7)
+        previous = float(events[-1]["balance"]) if events else sample.amount_usd
+        crossed_reset = self._crossed_weekly_reset(events, sample, week_start)
+        increment = (
+            sample.amount_usd
+            if crossed_reset
+            else max(sample.amount_usd - previous, 0.0)
+        )
+        event: dict[str, object] = {
+            "timestamp": sample.timestamp.isoformat(),
+            "balance": sample.amount_usd,
+            "increment": increment,
+        }
+        if crossed_reset:
+            event["completed_weekly_balance"] = previous
+        events.append(event)
+        events = events[-10000:]
+        write_json(self._path, events)
         month_start = datetime.combine(
             local.date().replace(day=1), time(9), tzinfo=self._timezone
         )
@@ -46,6 +56,17 @@ class RevenueAccumulator:
             weekly_usd=self._sum_since(events, week_start),
             monthly_usd=self._sum_since(events, month_start),
         )
+
+    @staticmethod
+    def _crossed_weekly_reset(
+        events: list[dict[str, object]],
+        sample: AccountBalance,
+        week_start: datetime,
+    ) -> bool:
+        if not events:
+            return False
+        previous_timestamp = datetime.fromisoformat(str(events[-1]["timestamp"]))
+        return previous_timestamp < week_start <= sample.timestamp
 
     def _period_start(self, now: datetime, period_date: date, boundary: time) -> datetime:
         start = datetime.combine(period_date, boundary, tzinfo=self._timezone)

@@ -181,18 +181,19 @@ Copy `config.example.json` to `config.json` for local development. Configure:
 
 ### How revenue is calculated
 
-The current-user endpoint exposes account values such as `balance`; it does not
+The current-user endpoint exposes the weekly `balance`; it does not
 provide hourly, daily, weekly, and monthly revenue totals. The monitor therefore
 stores successive balance samples in `state/revenue_events.json` and counts only
 positive changes as observed revenue. Hourly, 09:00 business-day, Saturday 09:00
 weekly, and first-day 09:00 monthly totals are aggregated from those events.
 
-The first successful sample establishes a baseline and reports zero revenue. Totals
-become accurate as the service observes subsequent changes. A payout lowers the
-balance and is treated as zero revenue, but earnings and a payout occurring between
-two samples cannot be separated using this endpoint alone. Set
-`vast_balance_field` to `paid_expected` only after confirming that value increases
-monotonically for the account.
+The first successful sample establishes a baseline and reports zero revenue. A
+balance decrease contributes no negative revenue but always becomes the next
+baseline. When a sample crosses the Saturday 09:00 JST reset, the prior balance is
+archived in the reset event and the new balance is counted from zero, so earnings
+between 09:00 and the first post-reset sample are retained. Null, string, or boolean
+balances are rejected before state is changed. `paid_expected` and `paid_verified`
+are not used by default.
 
 Run once for validation:
 

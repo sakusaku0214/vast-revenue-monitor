@@ -95,6 +95,19 @@ def test_current_user_balance_is_parsed(monkeypatch, tmp_path):
     assert client.get_account_balance().amount_usd == 36.8099836823924
 
 
+@pytest.mark.parametrize("invalid_balance", [None, "36.8", True])
+def test_invalid_balance_type_is_rejected(monkeypatch, tmp_path, invalid_balance):
+    client = VastApiClient(
+        "secret", "https://console.vast.ai/api/v0", 5, tmp_path / "response.json"
+    )
+    monkeypatch.setattr(
+        client, "_get_json", lambda _endpoint: {"balance": invalid_balance}
+    )
+
+    with pytest.raises(VastApiSchemaError, match="lacks numeric 'balance'"):
+        client.get_account_balance()
+
+
 def test_diagnostic_redacts_personal_and_secret_fields(tmp_path):
     client = VastApiClient("secret", "https://example.invalid", 5, tmp_path / "api.json")
 

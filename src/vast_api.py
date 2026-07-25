@@ -68,7 +68,7 @@ class VastApiClient:
         """Fetch the account balance used as the local revenue counter."""
         data = self._get_json(self._revenue_endpoint)
         try:
-            amount = self._number(data, (self._balance_field,))
+            amount = self._strict_number(data, self._balance_field)
             if amount < 0:
                 raise ValueError("Vast.ai account balance must not be negative")
             return AccountBalance(datetime.now(timezone.utc), amount)
@@ -78,6 +78,16 @@ class VastApiClient:
             raise VastApiSchemaError(
                 f"Vast.ai response lacks numeric {self._balance_field!r}; keys: {keys}"
             ) from exc
+
+    @staticmethod
+    def _strict_number(data: Any, key: str) -> float:
+        """Read an API numeric field without coercing nulls, strings, or booleans."""
+        if not isinstance(data, dict):
+            raise TypeError("Vast.ai response was not a JSON object")
+        value = data.get(key)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise TypeError(f"Vast.ai field {key!r} was not numeric")
+        return float(value)
 
     def _get_json(self, endpoint: str) -> dict[str, Any]:
         url = f"{self._base_url}{endpoint}"
