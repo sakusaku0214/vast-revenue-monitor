@@ -77,6 +77,16 @@ class RevenueMonitor:
         self._discord.send_report(snapshot, rate, changes, records, goal)
         LOGGER.info("Sent revenue report for %s", snapshot.timestamp.isoformat())
 
+    def validate_connections(self) -> None:
+        """Validate required upstream APIs without posting or changing report state."""
+        snapshot = self._vast.get_revenue_snapshot()
+        rate = self._exchange.get_usdjpy()
+        LOGGER.info(
+            "Connectivity validation succeeded at %s with USDJPY %.4f",
+            snapshot.timestamp.isoformat(),
+            rate,
+        )
+
     def _fetch_snapshot_with_alert(self) -> RevenueSnapshot:
         """Fetch a snapshot and make a best-effort schema-change notification."""
         try:

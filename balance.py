@@ -26,10 +26,16 @@ def parse_args() -> argparse.Namespace:
         default=Path("config.json"),
         help="Path to config.json",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--once",
         action="store_true",
         help="Run one report cycle and exit",
+    )
+    mode.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate Vast.ai and exchange APIs without sending a report",
     )
     return parser.parse_args()
 
@@ -49,7 +55,9 @@ def main() -> int:
         except BlockingIOError as exc:
             raise RuntimeError("Another Vast Revenue Monitor process is running") from exc
         monitor = RevenueMonitor(config)
-        if args.once:
+        if args.validate:
+            monitor.validate_connections()
+        elif args.once:
             monitor.run_once()
         else:
             monitor.run_forever()

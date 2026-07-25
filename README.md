@@ -69,6 +69,11 @@ including the webhook because both values are secrets. The installer then:
 6. Installs the systemd unit and runs `daemon-reload`, `enable`, and `restart`.
 7. Confirms that the service is active and prints `systemctl status`.
 
+Before activation, the installer also calls Vast.ai and an exchange-rate provider.
+It does not send a Discord report or modify revenue history during this check. A
+schema or connectivity failure stops installation instead of reporting success for
+a running but non-functional service.
+
 Success ends with:
 
 ```text
@@ -91,6 +96,33 @@ sudo journalctl -u vast-balance.service -n 50 --no-pager
 The first two commands must print `enabled` and `active`. API or webhook errors are
 shown by the journal command and in
 `/opt/vast-revenue-monitor/logs/vast-revenue-monitor.log`.
+
+### Vast.ai schema validation errors
+
+`VastApiSchemaError` means the process is running, but the received Vast.ai JSON
+does not contain the revenue fields understood by this version. It is a real
+application error; `active (running)` alone does not mean reports are working.
+
+On every schema parsing failure, the complete response is saved with private file
+permissions to:
+
+```text
+/opt/vast-revenue-monitor/logs/api_response.json
+```
+
+During a new installation or upgrade, API validation happens before activation.
+If it fails, the staged installation is rolled back and the response is retained at:
+
+```text
+/tmp/vast-revenue-monitor-api_response.json
+```
+
+Inspect field names without posting secret values publicly:
+
+```bash
+sudo python3 -m json.tool /tmp/vast-revenue-monitor-api_response.json
+sudo journalctl -u vast-balance.service -n 100 -l --no-pager
+```
 
 Installed files are located at:
 

@@ -200,6 +200,21 @@ chmod 755 "${STAGING_DIR}"
 chmod 640 "${STAGING_DIR}/config.json"
 chmod 700 "${STAGING_DIR}/state" "${STAGING_DIR}/logs"
 
+log "Validating Vast.ai and exchange-rate API connectivity..."
+if ! (
+  cd "${STAGING_DIR}"
+  runuser --user "${SERVICE_USER}" -- \
+    .venv/bin/python balance.py --config config.json --validate
+); then
+  if [[ -f "${STAGING_DIR}/logs/api_response.json" ]]; then
+    install -o root -g root -m 0600 \
+      "${STAGING_DIR}/logs/api_response.json" \
+      /tmp/vast-revenue-monitor-api_response.json
+    log "Saved the failed Vast.ai response to /tmp/vast-revenue-monitor-api_response.json"
+  fi
+  fail "upstream API validation failed; the service was not activated"
+fi
+
 log "Activating the prepared release..."
 if [[ -d "${APP_DIR}" ]]; then
   BACKUP_DIR="$(mktemp -d /opt/.vast-revenue-monitor.old.XXXXXX)"

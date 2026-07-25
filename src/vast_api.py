@@ -67,12 +67,19 @@ class VastApiClient:
                 gpu_availability=self._gpu_availability(data),
             )
         except (KeyError, TypeError, ValueError) as exc:
+            self._persist_diagnostic(data)
+            top_level_keys = self._keys_for_diagnostic(data)
+            revenue_keys = self._keys_for_diagnostic(revenue)
             LOGGER.error(
-                "Unable to parse Vast.ai revenue response. "
-                "Enable DEBUG logging and inspect logs/api_response.json."
+                "Unable to parse Vast.ai revenue response; top-level keys=%s, "
+                "revenue keys=%s. Inspect %s.",
+                top_level_keys,
+                revenue_keys,
+                self._debug_response_path,
             )
             raise VastApiSchemaError(
-                "Vast.ai revenue response structure is unsupported"
+                "Vast.ai revenue response structure is unsupported; "
+                f"top-level keys: {top_level_keys}; revenue keys: {revenue_keys}"
             ) from exc
 
     def _get_json(self, endpoint: str) -> dict[str, Any]:
@@ -82,13 +89,24 @@ class VastApiClient:
         response.raise_for_status()
         payload = response.json()
         if LOGGER.isEnabledFor(logging.DEBUG):
-            try:
-                write_json(self._debug_response_path, payload)
-            except (OSError, TypeError, ValueError):
-                LOGGER.exception("Unable to persist Vast.ai debug response")
+            self._persist_diagnostic(payload)
         if not isinstance(payload, dict):
             raise VastApiSchemaError("Vast.ai response was not a JSON object")
         return payload
+
+    def _persist_diagnostic(self, payload: Any) -> None:
+        """Persist the latest payload without hiding the original API failure."""
+        try:
+            write_json(self._debug_response_path, payload)
+        except (OSError, TypeError, ValueError):
+            LOGGER.exception("Unable to persist Vast.ai API diagnostic response")
+
+    @staticmethod
+    def _keys_for_diagnostic(payload: Any) -> list[str]:
+        """Return only field names so normal logs do not expose API values."""
+        if not isinstance(payload, dict):
+            return []
+        return sorted(str(key) for key in payload)
 
     @staticmethod
     def _number(data: Any, keys: tuple[str, ...]) -> float:

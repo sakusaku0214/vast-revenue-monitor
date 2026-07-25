@@ -14,6 +14,9 @@ if find_spec("requests") is None:
             pass
 
     class Session:  # noqa: D101 - minimal test stub
+        def __init__(self) -> None:
+            self.headers: dict[str, str] = {}
+
         def mount(self, *args: object, **kwargs: object) -> None:
             pass
 
