@@ -1,6 +1,7 @@
 """Discord webhook embed rendering and delivery."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,6 +17,7 @@ COLOR_BY_STATUS = {
     ReportStatus.WARNING: 0xE74C3C,
     ReportStatus.RECORD: 0xD4AF37,
 }
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,28 @@ class DiscordNotifier:
 
     webhook_url: str
     timeout_seconds: int
+
+    def validate_webhook(self) -> None:
+        """Verify webhook credentials without posting a Discord message."""
+        session = requests.Session()
+        try:
+            retry = Retry(
+                total=4,
+                backoff_factor=1,
+                status_forcelist=(429, 500, 502, 503, 504),
+                allowed_methods=("GET",),
+            )
+            session.mount("https://", HTTPAdapter(max_retries=retry))
+            response = session.get(self.webhook_url, timeout=self.timeout_seconds)
+            try:
+                response.raise_for_status()
+                payload = response.json()
+            finally:
+                response.close()
+        finally:
+            session.close()
+        name = payload.get("name") if isinstance(payload, dict) else None
+        LOGGER.info("Discord webhook validation succeeded%s", f" ({name})" if name else "")
 
     def send_report(
         self,

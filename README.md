@@ -58,8 +58,9 @@ The final line should be:
 sudo bash install.sh
 ```
 
-Enter the Discord webhook URL and Vast.ai API key when prompted. Input is hidden,
-including the webhook because both values are secrets. The installer then:
+Enter the Discord webhook URL and Vast.ai API key when prompted. Each secret must
+be entered twice; a mismatch stops installation. Input is hidden, including the
+webhook because its token grants permission to post to Discord. The installer then:
 
 1. Installs `ca-certificates`, Python 3.12, `python3.12-venv`, and `rsync` with APT.
 2. Builds and validates a complete release in a temporary directory.
@@ -69,10 +70,11 @@ including the webhook because both values are secrets. The installer then:
 6. Installs the systemd unit and runs `daemon-reload`, `enable`, and `restart`.
 7. Confirms that the service is active and prints `systemctl status`.
 
-Before activation, the installer also calls Vast.ai and an exchange-rate provider.
-It does not send a Discord report or modify revenue history during this check. A
-schema or connectivity failure stops installation instead of reporting success for
-a running but non-functional service.
+Before activation, the installer calls Vast.ai, an exchange-rate provider, and
+Discord's webhook information endpoint. It does not post a Discord message or
+modify revenue history during this check. Invalid credentials, schema errors, or
+connectivity failures stop installation instead of reporting success for a running
+but non-functional service.
 
 Success ends with:
 

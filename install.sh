@@ -26,6 +26,20 @@ fail() {
   exit 1
 }
 
+read_secret_twice() {
+  local label=$1
+  local output_name=$2
+  local first=""
+  local second=""
+  read -r -s -p "${label}: " first
+  printf '\n'
+  read -r -s -p "${label} (confirm): " second
+  printf '\n'
+  [[ -n "${first}" ]] || fail "${label} must not be empty"
+  [[ "${first}" == "${second}" ]] || fail "${label} entries did not match"
+  printf -v "${output_name}" '%s' "${first}"
+}
+
 usage() {
   cat <<'EOF'
 Usage: sudo bash install.sh [--check]
@@ -142,13 +156,11 @@ if [[ -f "${APP_DIR}/config.json" ]]; then
 else
   if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
     [[ -t 0 ]] || fail "Set DISCORD_WEBHOOK_URL for non-interactive installation"
-    read -r -s -p "Discord webhook URL: " DISCORD_WEBHOOK_URL
-    printf '\n'
+    read_secret_twice "Discord webhook URL" DISCORD_WEBHOOK_URL
   fi
   if [[ -z "${VAST_API_KEY:-}" ]]; then
     [[ -t 0 ]] || fail "Set VAST_API_KEY for non-interactive installation"
-    read -r -s -p "Vast.ai API key: " VAST_API_KEY
-    printf '\n'
+    read_secret_twice "Vast.ai API key" VAST_API_KEY
   fi
   export DISCORD_WEBHOOK_URL VAST_API_KEY
   cp -- "${STAGING_DIR}/config.example.json" "${STAGING_DIR}/config.json"

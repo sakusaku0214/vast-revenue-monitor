@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from src import discord_embed
 from src.discord_embed import DiscordNotifier
 from src.models import Change, GoalStatus, GpuAvailability, Period, ReportStatus, RevenueSnapshot
 
@@ -40,3 +41,43 @@ def test_embed_contains_gpu_warning_and_jpy_format():
 
     assert "¥1,234" in values
     assert "All GPUs Available" in names
+
+
+def test_validate_webhook_uses_get_without_posting(monkeypatch):
+    calls = {"get": 0, "post": 0, "response_closed": 0, "session_closed": 0}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"name": "Revenue reports"}
+
+        def close(self):
+            calls["response_closed"] += 1
+
+    class Session:
+        def mount(self, *_args, **_kwargs):
+            return None
+
+        def get(self, *_args, **_kwargs):
+            calls["get"] += 1
+            return Response()
+
+        def post(self, *_args, **_kwargs):
+            calls["post"] += 1
+            raise AssertionError("validation must not post")
+
+        def close(self):
+            calls["session_closed"] += 1
+
+    monkeypatch.setattr(discord_embed.requests, "Session", Session)
+
+    DiscordNotifier("https://discord.com/api/webhooks/id/token", 5).validate_webhook()
+
+    assert calls == {
+        "get": 1,
+        "post": 0,
+        "response_closed": 1,
+        "session_closed": 1,
+    }
