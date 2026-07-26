@@ -156,6 +156,7 @@ unset DISCORD_WEBHOOK_URL VAST_API_KEY
 対象のリリースを取得したうえで、インストールと同じコマンドを再実行します。
 
 ```bash
+git pull origin main
 sudo bash install.sh
 ```
 
@@ -220,8 +221,9 @@ sudo /opt/vast-revenue-monitor/install.sh --backup
 sudo /opt/vast-revenue-monitor/install.sh --restore /path/to/vast-revenue-monitor-backup-YYYYMMDD-HHMMSS.tar.gz
 sudo /opt/vast-revenue-monitor/uninstall.sh
 ```
-
-バックアップには API キー、Webhook、収益履歴が含まれるため、権限 `0600` で暗号化し、安全な場所に保管してください。公開しないでください。旧バックアップで `language` が欠けている場合にも対応しています。
+バックアップにはAPIキー、Webhook、収益履歴が含まれます。
+ファイル権限を `0600` に設定し、安全な場所へ保管してください。
+必要に応じて、別途暗号化してください。
 
 ## トラブルシューティングとセキュリティ
 
