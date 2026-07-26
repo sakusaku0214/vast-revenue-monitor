@@ -4,7 +4,8 @@
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3"
-       alt="Vast Revenue Monitor Discord notification>
+       alt="Vast Revenue Monitor Discord notification"
+       width="465">
 </p>
 
 **現在の安定版: v1.0.0**
