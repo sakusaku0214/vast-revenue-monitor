@@ -11,6 +11,8 @@ English | [日本語](README.ja.md)
 
 **Current Stable Release: v1.0.1**
 
+**Automatically monitor your Vast.ai revenue and send professional Discord notifications via Webhooks.**
+
 Production-ready Python 3.12+ service for monitoring Vast.ai revenue and posting hourly Discord webhook embed reports in USD and JPY.
 
 ## Features
