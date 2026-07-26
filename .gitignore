@@ -216,3 +216,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Vast Revenue Monitor runtime data and secrets
+/config.json
+/state/*
+!/state/.gitkeep
+/logs/*
+!/logs/.gitkeep
+/api_response.json
+/revenue_events.json
+/records.json
+/history.json
+/history-*.csv
+/vast-revenue-monitor-backup-*.tar.gz
+*.tar.gz
+*.bak
+*.tmp
