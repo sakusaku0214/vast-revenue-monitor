@@ -59,6 +59,7 @@ class RevenueMonitor:
             config.weekly_goal_usd,
             config.detailed_report,
             config.timezone.key,
+            config.language,
         )
 
     def run_once(self) -> None:

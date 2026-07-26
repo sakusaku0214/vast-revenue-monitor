@@ -7,6 +7,8 @@ import fcntl
 import logging
 from pathlib import Path
 
+VERSION = "1.0.0"
+
 from src.config import AppConfig
 from src.logger import configure_logging
 from src.scheduler import RevenueMonitor
@@ -20,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Monitor Vast.ai revenue and post Discord reports."
     )
+    parser.add_argument("--version", action="version", version=f"Vast Revenue Monitor {VERSION}")
     parser.add_argument(
         "--config",
         type=Path,
