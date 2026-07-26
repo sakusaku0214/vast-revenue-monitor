@@ -27,10 +27,8 @@ Vast.ai の残高増加から収益を計算し、USD/JPY の Discord Embed を 
 Ubuntu 24.04 LTS、HTTPS 接続、`sudo`、Discord Webhook URL、Vast.ai API キーが必要です。
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/sakusaku0214/vast-revenue-monitor.git
 cd vast-revenue-monitor
-sudo bash install.sh --check
 sudo bash install.sh
 ```
 
