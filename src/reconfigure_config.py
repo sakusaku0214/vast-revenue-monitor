@@ -1,4 +1,4 @@
-"""Safe interactive updater for the two supported mutable settings."""
+"""Safe interactive updater for the supported mutable settings."""
 from __future__ import annotations
 
 import json
@@ -40,9 +40,16 @@ def main(path: Path) -> int:
         current_language = data.get("language", "en")
         if current_language not in {"en", "ja"}:
             current_language = "en"
+        current_detailed_report = data.get("detailed_report", False)
+        if not isinstance(current_detailed_report, bool):
+            raise ValueError("current detailed report setting must be true or false")
 
         print(f"Current weekly goal: ${current_goal:g}")
         print(f"Current notification language: {current_language}")
+        print(
+            "Current detailed report: "
+            f"{'enabled' if current_detailed_report else 'disabled'}"
+        )
         raw_goal = input(f"Weekly revenue goal (USD) [{current_goal:g}]: ").strip()
         goal = current_goal if not raw_goal else float(raw_goal)
         if not math.isfinite(goal) or goal <= 0:
@@ -58,9 +65,27 @@ def main(path: Path) -> int:
         if language not in {"en", "ja"}:
             raise ValueError("language must be en or ja")
 
+        print("Detailed report:\n1) Disabled (compact report)\n2) Enabled (detailed report)")
+        detailed_report = current_detailed_report
+        while True:
+            choice = input(
+                "Choice "
+                f"[{'enabled' if current_detailed_report else 'disabled'}]: "
+            ).strip().lower()
+            if not choice:
+                break
+            if choice in {"1", "false", "no", "n", "off"}:
+                detailed_report = False
+                break
+            if choice in {"2", "true", "yes", "y", "on"}:
+                detailed_report = True
+                break
+            print("Invalid choice. Enter 1/2, true/false, yes/no, y/n, or on/off.")
+
         print("\nProposed changes:")
-        print(f"  Weekly revenue goal: ${goal:g}")
-        print(f"  Notification language: {language}")
+        print(f"  Weekly goal:        {goal:g}")
+        print(f"  Language:           {language}")
+        print(f"  Detailed report:    {'enabled' if detailed_report else 'disabled'}")
         if input("Apply these changes? [y/N]: ").strip().lower() not in {"y", "yes"}:
             print("No changes applied.")
             return 3
@@ -68,6 +93,10 @@ def main(path: Path) -> int:
         updated = dict(data)
         updated["weekly_goal_usd"] = goal
         updated["language"] = language
+        updated["detailed_report"] = detailed_report
+        if updated == data:
+            print("Configuration is unchanged.")
+            return 3
         _atomic_write(path, updated)
         return 0
     except (ValueError, OSError, json.JSONDecodeError) as exc:

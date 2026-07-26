@@ -305,7 +305,7 @@ service/runtime but preserves only `config.json` and `state/` for a later instal
 For automated environments only, `sudo bash uninstall.sh --purge --yes` skips the
 confirmation.
 
-## Reconfigure without reinstalling
+## Reconfigure weekly goal, language, and detailed reports
 
 ```bash
 sudo /opt/vast-revenue-monitor/reconfigure.sh
@@ -313,10 +313,12 @@ sudo /opt/vast-revenue-monitor/reconfigure.sh
 sudo /opt/vast-revenue-monitor/install.sh --reconfigure
 ```
 
-This displays the current Weekly Goal and notification language, preserves either
-value when Enter is pressed, and asks for confirmation. Only `weekly_goal_usd` and
-`language` are atomically updated; credentials, unknown keys, state, and history
-remain unchanged. The service is restarted only after a successful write.
+This displays the current Weekly Goal, notification language, and detailed-report
+setting, preserves any value when Enter is pressed, and asks for confirmation.
+Only `weekly_goal_usd`, `language`, and `detailed_report` are atomically updated;
+credentials, unknown keys, state, and history remain unchanged. Installations
+created before `detailed_report` existed default to Disabled until it is changed.
+The service is restarted only when the configuration actually changes.
 
 ## Backup and restore commands
 
@@ -402,13 +404,13 @@ pytest
 
 Run an immediate report with `sudo -u vast-revenue-monitor /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --config /opt/vast-revenue-monitor/config.json --once`. Check the installed CLI with `sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --version`.
 
-Change the Weekly Goal or notification language later with:
+Change the Weekly Goal, notification language, or detailed-report setting later with:
 
 ```bash
 sudo /opt/vast-revenue-monitor/reconfigure.sh
 ```
 
-The tool shows current values, accepts Enter to preserve either setting, reviews the proposal, and writes atomically only after confirmation. It preserves credentials, unknown settings, and every state/history file, then restarts `vast-balance.service`. Decimal positive goals are accepted; zero, negative, malformed, NaN, and infinite values are rejected. Choose `1`/`en` or `2`/`ja`.
+The tool shows current values, accepts Enter to preserve any setting, reviews the proposal, and writes atomically only after confirmation. It preserves credentials, unknown settings, and every state/history file, then restarts `vast-balance.service` only if the configuration changed. Decimal positive goals are accepted; zero, negative, malformed, NaN, and infinite values are rejected. Choose `1`/`en` or `2`/`ja` for language. Installations created before `detailed_report` existed default to Disabled until it is changed.
 
 ### Supported backup, restore, and uninstall
 
