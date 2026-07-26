@@ -55,13 +55,13 @@ sudo -u vast-revenue-monitor /opt/vast-revenue-monitor/.venv/bin/python /opt/vas
 sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --version
 ```
 
-## インストール後の再設定
+## 週間目標・言語・詳細レポートのインストール後の再設定
 
 ```bash
 sudo /opt/vast-revenue-monitor/reconfigure.sh
 ```
 
-現在の週間目標と言語を表示し、Enter なら維持します。`1`/`en` は英語、`2`/`ja` は日本語です。提案内容を確認してから書き込みます。APIキー、Webhook、未知のキー、状態、履歴、記録は変更・表示せず、原子的に設定を書き、成功後だけ `vast-balance.service` を再起動します。言語変更で収益履歴はリセットされません。ゼロ、負数、不正文字、NaN、無限値は拒否されます。
+現在の週間目標、言語、詳細レポート設定を表示し、Enter なら維持します。`1`/`en` は英語、`2`/`ja` は日本語です。詳細レポートには `1`/`false`/`no`/`n`/`off`（無効）または `2`/`true`/`yes`/`y`/`on`（有効）を指定できます。`detailed_report` が存在する前に作成されたインストールでは、変更するまで「無効」が既定値です。提案内容を確認してから書き込みます。APIキー、Webhook、未知のキー、状態、履歴、記録は変更・表示せず、原子的に設定を書き、実際に設定が変わった場合のみ `vast-balance.service` を再起動します。言語変更で収益履歴はリセットされません。ゼロ、負数、不正文字、NaN、無限値は拒否されます。
 
 ## バックアップ、復元、削除、更新
 

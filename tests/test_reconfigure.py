@@ -30,7 +30,7 @@ def config():
 
 def test_reconfigure_en_to_ja_preserves_secrets_and_unknown_keys(tmp_path):
     path = tmp_path / "config.json"; path.write_text(json.dumps(config()))
-    result = run_reconfigure(path, "1234.5\n2\ny\n")
+    result = run_reconfigure(path, "1234.5\n2\n\ny\n")
     assert result.returncode == 0
     updated = json.loads(path.read_text())
     assert updated["weekly_goal_usd"] == 1234.5 and updated["language"] == "ja"
@@ -41,9 +41,61 @@ def test_reconfigure_en_to_ja_preserves_secrets_and_unknown_keys(tmp_path):
 def test_reconfigure_enter_preserves_values_and_ja_to_en(tmp_path):
     value = config(); value["language"] = "ja"
     path = tmp_path / "config.json"; path.write_text(json.dumps(value))
-    assert run_reconfigure(path, "\n1\ny\n").returncode == 0
+    assert run_reconfigure(path, "\n1\n\ny\n").returncode == 0
     updated = json.loads(path.read_text())
     assert updated["weekly_goal_usd"] == 1000 and updated["language"] == "en"
+
+
+def test_missing_detailed_report_defaults_to_false_and_preserves_unknown_keys(tmp_path):
+    path = tmp_path / "config.json"; path.write_text(json.dumps(config()))
+    result = run_reconfigure(path, "\n\n\ny\n")
+    updated = json.loads(path.read_text())
+    assert result.returncode == 0
+    assert "Current detailed report: disabled" in result.stdout
+    assert updated["detailed_report"] is False
+    assert updated["unknown"] == {"keep": True}
+
+
+def test_enter_keeps_detailed_report_enabled(tmp_path):
+    value = config(); value["detailed_report"] = True
+    path = tmp_path / "config.json"; path.write_text(json.dumps(value))
+    result = run_reconfigure(path, "1001\n\n\ny\n")
+    assert result.returncode == 0
+    assert json.loads(path.read_text())["detailed_report"] is True
+
+
+def test_detailed_report_true_to_false(tmp_path):
+    value = config(); value["detailed_report"] = True
+    path = tmp_path / "config.json"; path.write_text(json.dumps(value))
+    result = run_reconfigure(path, "\n\nfalse\ny\n")
+    assert result.returncode == 0
+    assert json.loads(path.read_text())["detailed_report"] is False
+
+
+def test_detailed_report_false_to_true(tmp_path):
+    value = config(); value["detailed_report"] = False
+    path = tmp_path / "config.json"; path.write_text(json.dumps(value))
+    result = run_reconfigure(path, "\n\ntrue\ny\n")
+    assert result.returncode == 0
+    assert json.loads(path.read_text())["detailed_report"] is True
+
+
+def test_invalid_detailed_report_choice_prompts_again(tmp_path):
+    path = tmp_path / "config.json"; path.write_text(json.dumps(config()))
+    result = run_reconfigure(path, "\n\nmaybe\n2\ny\n")
+    assert result.returncode == 0
+    assert "Invalid choice." in result.stdout
+    assert json.loads(path.read_text())["detailed_report"] is True
+
+
+def test_unchanged_configuration_does_not_request_restart(tmp_path):
+    value = config(); value["detailed_report"] = False
+    path = tmp_path / "config.json"; original = json.dumps(value); path.write_text(original)
+    result = run_reconfigure(path, "\n\n\ny\n")
+    assert result.returncode == 0
+    assert path.read_text() == original
+    assert "No changes to apply." in result.stdout
+    assert "Configuration updated" not in result.stdout
 
 
 def test_invalid_goals_leave_original_untouched(tmp_path):
