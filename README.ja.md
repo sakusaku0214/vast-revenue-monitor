@@ -72,9 +72,10 @@ sudo bash install.sh
 対話形式で次の情報を入力します。
 
 - Discord Webhook URL（画面に表示されず、2回入力）
-- Vast.ai API キー（画面に表示されず、2回入力）
-- 週間収益目標（正の小数）
-- 通知言語（次の選択画面で指定。Enter で英語）
+- Vast.ai APIキー（画面に表示されず、2回入力）
+- 週間収益目標（$）
+- 詳細レポートを有効にするか（既定値：無効）
+- 通知言語（Enterで英語）
 
 ```text
 Select Discord notification language:
