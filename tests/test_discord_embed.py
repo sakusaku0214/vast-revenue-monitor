@@ -97,7 +97,7 @@ def test_simple_embed_contains_weekly_goal_and_all_time_high():
     text = "\n".join(field["value"] for field in embed["fields"])
 
     assert embed["title"] == "💰 VAST.AI HOURLY REPORT"
-    assert embed["footer"]["text"] == "Vast Revenue Monitor v1.0.0"
+    assert embed["footer"]["text"] == "Vast Revenue Monitor v1.0.1"
     assert "Progress: 44.8%" in text
     assert "Remaining to Goal: $662.87" in text
     assert "Daily Goal" not in " ".join(field["name"] for field in embed["fields"])

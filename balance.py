@@ -7,12 +7,11 @@ import fcntl
 import logging
 from pathlib import Path
 
-VERSION = "1.0.0"
-
 from src.config import AppConfig
 from src.logger import configure_logging
 from src.scheduler import RevenueMonitor
 from src.utils import ensure_directory
+from src.version import VERSION
 
 LOGGER = logging.getLogger(__name__)
 

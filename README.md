@@ -9,7 +9,7 @@
 
 English | [日本語](README.ja.md)
 
-**Current Stable Release: v1.0.0**
+**Current Stable Release: v1.0.1**
 
 Production-ready Python 3.12+ service for monitoring Vast.ai revenue and posting hourly Discord webhook embed reports in USD and JPY.
 
@@ -71,7 +71,9 @@ sudo bash install.sh
 
 Enter the Discord webhook URL and Vast.ai API key when prompted. Each secret must
 be entered twice; a mismatch stops installation. Input is hidden, including the
-webhook because its token grants permission to post to Discord. The installer then:
+webhook because its token grants permission to post to Discord. After the Weekly
+Goal and Detailed Report questions, select `1` or `en` for English, `2` or `ja`
+for Japanese, or press Enter to use English. The installer then:
 
 1. Installs `ca-certificates`, Python 3.12, `python3.12-venv`, and `rsync` with APT.
 2. Builds and validates a complete release in a temporary directory.
@@ -155,7 +157,9 @@ root-owned, while the service can write only its `state/` and `logs/` directorie
 
 ### Unattended installation
 
-For unattended installation, pass credentials through `sudo --preserve-env`:
+For unattended installation, pass credentials through `sudo --preserve-env`. The
+credentials are required; `NOTIFICATION_LANGUAGE` is optional, accepts only `en`
+or `ja`, and defaults to `en` when unset:
 
 ```bash
 export DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/.../...'
@@ -424,5 +428,5 @@ Configuration is `/opt/vast-revenue-monitor/config.json`; runtime data is under 
 💰 VAST.AI HOURLY REPORT
 Revenue — Hourly $5.36 · Daily $20.00 · Weekly $95.00
 Weekly Goal — Current $95.00 · Goal $100.00 · Remaining to Goal $5.00
-Vast Revenue Monitor v1.0.0
+Vast Revenue Monitor v1.0.1
 ```
