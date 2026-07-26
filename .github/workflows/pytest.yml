@@ -19,3 +19,8 @@ jobs:
           pip install -r requirements.txt 'pytest>=8.3.2,<9'
       - name: Run pytest
         run: pytest
+      - name: ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck install.sh uninstall.sh reconfigure.sh

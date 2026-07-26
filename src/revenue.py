@@ -51,7 +51,10 @@ class RevenueAccumulator:
             )
         return RevenueSnapshot(
             timestamp=sample.timestamp,
-            hourly_usd=self._sum_since(events, sample.timestamp - timedelta(hours=1)),
+            # "Hourly" is the newest successful observation, not a rolling
+            # window or a normalized rate.  Using the event's increment avoids
+            # double counting adjacent samples affected by clock drift.
+            hourly_usd=increment,
             daily_usd=self._sum_since(events, day_start),
             weekly_usd=sample.amount_usd,
             monthly_usd=self._sum_since(events, month_start),

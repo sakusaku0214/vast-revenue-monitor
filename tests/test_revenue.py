@@ -18,10 +18,10 @@ def test_revenue_accumulator_uses_positive_balance_deltas(tmp_path):
 
     assert baseline.hourly_usd == 0.0
     assert increased.hourly_usd == 2.5
-    assert payout.hourly_usd == 2.5
+    assert payout.hourly_usd == 0.0
 
     recovered = accumulator.update(AccountBalance(now + timedelta(minutes=50), 11.0))
-    assert recovered.hourly_usd == 3.5
+    assert recovered.hourly_usd == 1.0
 
 
 def test_revenue_accumulator_resets_daily_total_at_0900(tmp_path):

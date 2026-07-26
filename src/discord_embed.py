@@ -11,6 +11,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from src.models import Change, GoalStatus, Period, RecordBreak, ReportStatus, RevenueSnapshot
+from src.version import footer_text
+from src.i18n import PERIOD, translations
 
 COLOR_BY_STATUS = {
     ReportStatus.NORMAL: 0x2ECC71,
@@ -30,6 +32,11 @@ class DiscordNotifier:
     weekly_goal_usd: float = 1000.0
     detailed_report: bool = False
     timezone_name: str = "Asia/Tokyo"
+    language: str = "en"
+
+    @property
+    def t(self) -> dict[str, str]:
+        return translations(self.language)
 
     def validate_webhook(self) -> None:
         """Verify webhook credentials without posting a Discord message."""
@@ -73,12 +80,12 @@ class DiscordNotifier:
     def send_schema_alert(self, message: str) -> None:
         """Notify Discord that the Vast.ai API schema could not be parsed."""
         self._post_embed({
-            "title": "⚠️ Vast.ai API Schema Alert",
+            "title": self.t["schema_title"],
             "color": COLOR_BY_STATUS[ReportStatus.WARNING],
             "description": message,
             "fields": [{
-                "name": "Action required",
-                "value": "Enable DEBUG logging and inspect `logs/api_response.json`.",
+                "name": self.t["action_required"],
+                "value": self.t["schema_action"],
                 "inline": False,
             }],
         })
@@ -125,59 +132,61 @@ class DiscordNotifier:
         if warning:
             fields.append(warning)
         local_time = snapshot.timestamp.astimezone(ZoneInfo(self.timezone_name))
+        fields.append({
+            "name": "USDJPY",
+            "value": f"{usdjpy:.4f} • {local_time:%Y-%m-%d %H:%M JST}",
+            "inline": False,
+        })
         return {
-            "title": "💰 VAST.AI HOURLY REPORT",
+            "title": self.t["title"],
             "color": COLOR_BY_STATUS[status],
             "fields": fields,
-            "footer": {
-                "text": f"USDJPY {usdjpy:.4f} • {local_time:%Y-%m-%d %H:%M JST}"
-            },
+            "footer": {"text": footer_text()},
         }
 
-    @staticmethod
     def _simple_revenue_fields(
-        snapshot: RevenueSnapshot, rate: float
+        self, snapshot: RevenueSnapshot, rate: float
     ) -> list[dict[str, Any]]:
         value = (
-            f"Hourly  **${snapshot.hourly_usd:,.2f}** / ¥{snapshot.hourly_usd * rate:,.0f}\n"
-            f"Daily   **${snapshot.daily_usd:,.2f}** / ¥{snapshot.daily_usd * rate:,.0f}\n"
-            f"Weekly  **${snapshot.weekly_usd:,.2f}** / ¥{snapshot.weekly_usd * rate:,.0f}"
+            f"{self.t['hourly']}  **${snapshot.hourly_usd:,.2f}** / ¥{snapshot.hourly_usd * rate:,.0f}\n"
+            f"{self.t['daily']}   **${snapshot.daily_usd:,.2f}** / ¥{snapshot.daily_usd * rate:,.0f}\n"
+            f"{self.t['weekly']}  **${snapshot.weekly_usd:,.2f}** / ¥{snapshot.weekly_usd * rate:,.0f}"
         )
-        return [{"name": "Revenue", "value": value, "inline": False}]
+        return [{"name": self.t["revenue"], "value": value, "inline": False}]
 
     def _weekly_goal_field(self, current: float) -> dict[str, Any]:
         remaining = max(self.weekly_goal_usd - current, 0.0)
         progress = current / self.weekly_goal_usd * 100.0
         return {
-            "name": "Weekly Goal",
+            "name": self.t["weekly_goal"],
             "value": (
-                f"Current: ${current:,.2f}\nGoal: ${self.weekly_goal_usd:,.2f}\n"
-                f"Progress: {progress:.1f}%\nRemaining: ${remaining:,.2f}"
+                f"{self.t['current']}: ${current:,.2f}\n{self.t['goal']}: ${self.weekly_goal_usd:,.2f}\n"
+                f"{self.t['progress']}: {progress:.1f}%\n{self.t['remaining_goal']}: ${remaining:,.2f}"
             ),
             "inline": True,
         }
 
-    @staticmethod
-    def _all_time_high_field(highest: dict[Period, float]) -> dict[str, Any]:
+    def _all_time_high_field(self, highest: dict[Period, float]) -> dict[str, Any]:
         return {
-            "name": "All Time High",
+            "name": self.t["all_time_high"],
             "value": "\n".join(
-                f"{period.value.title()}: ${highest.get(period, 0.0):,.2f}"
+                f"{self.t[period.value]}: ${highest.get(period, 0.0):,.2f}"
                 for period in Period
             ),
             "inline": True,
         }
 
-    @staticmethod
-    def _record_embed(record: RecordBreak) -> dict[str, Any]:
+    def _record_embed(self, record: RecordBreak) -> dict[str, Any]:
         return {
-            "title": f"🏆 NEW {record.period.value.upper()} RECORD",
+            "title": self.t["record"].format(
+                period=PERIOD.get(self.language, PERIOD["en"])[record.period.value]
+            ),
             "color": COLOR_BY_STATUS[ReportStatus.RECORD],
             "fields": [
-                {"name": "Current", "value": f"${record.current_usd:,.2f}", "inline": True},
-                {"name": "Previous", "value": f"${record.previous_best_usd:,.2f}", "inline": True},
+                {"name": self.t["current"], "value": f"${record.current_usd:,.2f}", "inline": True},
+                {"name": self.t["previous"], "value": f"${record.previous_best_usd:,.2f}", "inline": True},
                 {
-                    "name": "Improvement",
+                    "name": self.t["improvement"],
                     "value": f"{record.improvement_percent:.1f}%",
                     "inline": True,
                 },
@@ -191,53 +200,51 @@ class DiscordNotifier:
         changes: dict[str, Change],
     ) -> list[dict[str, Any]]:
         return [
-            self._period_field("Hourly", snapshot.hourly_usd, usdjpy, changes["hourly"]),
-            self._period_field("Daily", snapshot.daily_usd, usdjpy, changes["daily"]),
-            self._period_field("Weekly", snapshot.weekly_usd, usdjpy, changes["weekly"]),
-            self._period_field("Monthly", snapshot.monthly_usd, usdjpy, changes["monthly"]),
+            self._period_field(self.t["hourly"], snapshot.hourly_usd, usdjpy, changes["hourly"]),
+            self._period_field(self.t["daily"], snapshot.daily_usd, usdjpy, changes["daily"]),
+            self._period_field(self.t["weekly"], snapshot.weekly_usd, usdjpy, changes["weekly"]),
+            self._period_field(self.t["monthly"], snapshot.monthly_usd, usdjpy, changes["monthly"]),
         ]
 
-    @staticmethod
-    def _goal_field(goal: GoalStatus) -> dict[str, Any]:
-        pace_label = "Ahead" if goal.pace_delta_percent >= 0 else "Behind"
+    def _goal_field(self, goal: GoalStatus) -> dict[str, Any]:
+        pace_label = self.t["ahead"] if goal.pace_delta_percent >= 0 else self.t["behind"]
         return {
-            "name": "Daily Goal",
+            "name": self.t["daily_goal"],
             "value": (
-                f"Progress: ${goal.progress_usd:,.2f}\n"
-                f"Remaining: ${goal.remaining_usd:,.2f}\n"
-                f"Current Progress: {goal.current_percent:.1f}%\n"
-                f"Expected Progress: {goal.expected_percent:.1f}%\n"
+                f"{self.t['progress']}: ${goal.progress_usd:,.2f}\n"
+                f"{self.t['remaining']}: ${goal.remaining_usd:,.2f}\n"
+                f"{self.t['current_progress']}: {goal.current_percent:.1f}%\n"
+                f"{self.t['expected_progress']}: {goal.expected_percent:.1f}%\n"
                 f"{pace_label}: {goal.pace_delta_percent:+.1f}%\n"
-                f"Estimated final: ${goal.estimated_final_usd:,.2f}\n"
-                f"Status: {'On Track' if goal.on_track else 'Behind Pace'}"
+                f"{self.t['estimated_final']}: ${goal.estimated_final_usd:,.2f}\n"
+                f"{self.t['status']}: {self.t['on_track'] if goal.on_track else self.t['behind_pace']}"
             ),
             "inline": False,
         }
 
-    @staticmethod
-    def _gpu_warning_field(snapshot: RevenueSnapshot) -> dict[str, Any] | None:
+    def _gpu_warning_field(self, snapshot: RevenueSnapshot) -> dict[str, Any] | None:
         availability = snapshot.gpu_availability
         if availability is None or not availability.all_available:
             return None
         return {
-            "name": "⚠️ All GPUs Available",
-            "value": (
-                f"Detected {availability.total} configured GPU(s) with no active rentals. "
-                "Check pricing, host health, and Vast.ai listing status."
-            ),
+            "name": self.t["gpu_title"],
+            "value": self.t["gpu_text"].format(total=availability.total),
             "inline": False,
         }
 
-    @staticmethod
-    def _record_fields(records: dict[Period, RecordBreak]) -> list[dict[str, Any]]:
+    def _record_fields(
+        self, records: dict[Period, RecordBreak]
+    ) -> list[dict[str, Any]]:
         fields: list[dict[str, Any]] = []
         for period, record in records.items():
             fields.append({
-                "name": f"🏆 NEW {period.value.upper()} RECORD",
+                "name": self.t["record"].format(
+                    period=PERIOD.get(self.language, PERIOD["en"])[period.value]
+                ),
                 "value": (
-                    f"Current: ${record.current_usd:,.2f}\n"
-                    f"Previous best: ${record.previous_best_usd:,.2f}\n"
-                    f"Improvement: {record.improvement_percent:.1f}%"
+                    f"{self.t['current']}: ${record.current_usd:,.2f}\n"
+                    f"{self.t['previous']}: ${record.previous_best_usd:,.2f}\n"
+                    f"{self.t['improvement']}: {record.improvement_percent:.1f}%"
                 ),
                 "inline": False,
             })
