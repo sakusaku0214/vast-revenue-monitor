@@ -3,38 +3,78 @@
 <p>
   <img src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3"
        alt="Vast Revenue Monitor Discord notification"
-       width="465">
+       width="400">
 </p>
 
 [English](README.md) | 日本語
 
 **現在の安定版: v1.0.1**
 
-**Vast.aiの収益を自動で監視し、Discordへ見やすい収益通知を送信するためのモニタリングサービスです。**
+## 概要
 
-Python 3.12以降対応。Discordへの日英バイリンガル通知、収益履歴、最高記録、週間目標管理、為替換算などを備えた本番運用向けツールです
+Vast.aiホスト向けの収益監視・Discord通知ツールです。Vast.ai APIから収益情報を定期的に取得し、時間・日・週・月ごとの収益や最高記録、目標の進捗をDiscord Embedで通知します。
 
-## 機能
+Python 3.12以降に対応した本番運用向けのサービスです。日本語と英語の両方の通知に対応しています。
 
-- 直近区間（英語表示は Hourly）、本日、今週、今月の収益
-- USDJPY の複数プロバイダーと永続キャッシュ
-- 週間目標、最高記録、詳細レポート、GPU/API 警告
-- 土曜日 09:00 JST のリセット、履歴・状態の原子的保存
-- 英語 (`en`) / 日本語 (`ja`) の通知
+## 主な機能
 
-「直近区間」は最新の正常な観測で得た正の増加額そのものです。60分移動合計でも、時間換算・補正したレートでもありません。短い手動区間や遅延区間も実額を表示します。
+- 直近区間（英語表示では Hourly）、本日、今週、今月の収益を通知
+- USD/JPY の為替レートを複数のプロバイダーから取得し、永続キャッシュを利用
+- 週間目標の進捗管理と最高記録の更新通知
+- 詳細レポート、GPU/API 警告
+- 土曜日 09:00 JST 付近での週間リセット
+- 履歴・状態の原子的な保存
+- 通知言語：英語 (`en`) / 日本語 (`ja`)
 
-## 要件とインストール
+「直近区間」は、最新の正常な観測で得られた正の増加額そのものです。60分の移動合計でも、時間換算・補正したレートでもありません。短い手動区間や遅延があった場合も、実際の増加額を表示します。
 
-Ubuntu 24.04 LTS、HTTPS 接続、`sudo`、Discord Webhook URL、Vast.ai API キーが必要です。
+## Ubuntu 24.04 LTSへのインストール
+
+### 事前に準備するもの
+
+以下が必要です。
+
+- Ubuntu 24.04 LTS サーバ（DNS と HTTPS 接続が動作していること）
+- `sudo` 権限を持つユーザー
+- Discord Webhook URL（通知先チャンネル用）
+- Vast.ai API キー
+
+Python のインストールや仮想環境の作成、systemd の手動設定は不要です。インストーラーがすべて自動で行います。
+
+### リポジトリを取得する
 
 ```bash
+sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/sakusaku0214/vast-revenue-monitor.git
 cd vast-revenue-monitor
+```
+
+### インストール前の確認（任意）
+
+ファイルを変更せずに、リポジトリとホスト環境をチェックできます。
+
+```bash
+sudo bash install.sh --check
+```
+
+最後に次のメッセージが表示されれば成功です。
+
+```text
+[vast-revenue-monitor] Validation completed; no changes were made.
+```
+
+### インストールを実行する
+
+```bash
 sudo bash install.sh
 ```
 
-初回対話設定では秘密情報を非表示で2回入力し、正の小数の週間収益目標を設定します。通知言語は次から選び、Enter は英語です。
+対話形式で次の情報を入力します。
+
+- Discord Webhook URL（画面に表示されず、2回入力）
+- Vast.ai API キー（画面に表示されず、2回入力）
+- 週間収益目標（正の小数）
+- 通知言語（次の選択画面で指定。Enter で英語）
 
 ```text
 Select Discord notification language:
@@ -43,43 +83,114 @@ Select Discord notification language:
 Choice [1]:
 ```
 
-非対話では必須の `DISCORD_WEBHOOK_URL`、`VAST_API_KEY` と任意の `NOTIFICATION_LANGUAGE`（`en` または `ja`、未設定時は `en`）を `sudo --preserve-env` で渡します。通常アップグレードで既存 `config.json` は上書きされず、言語選択も表示されません。
+インストール中に Vast.ai API、為替レート取得先、Discord Webhook の検証が行われます。検証に失敗した場合はインストールが中断され、不完全な状態はロールバックされます。
 
-## 設定と運用
+成功すると次のメッセージが表示されます。
 
-設定は `/opt/vast-revenue-monitor/config.json`、状態・履歴は `state/`、ログは `logs/` です。`weekly_goal_usd` は週間目標（正の小数）、`language` は `en` または `ja` です。古い設定に `language` がなければ英語、未対応値も警告後に英語となります。
+```text
+[vast-revenue-monitor] Installation completed successfully.
+```
+
+### 動作を確認する
 
 ```bash
-sudo systemctl status vast-balance.service
-sudo systemctl restart vast-balance.service
-sudo journalctl -u vast-balance.service -f
+sudo systemctl is-enabled vast-balance.service
+sudo systemctl is-active vast-balance.service
+sudo systemctl status vast-balance.service --no-pager
+sudo journalctl -u vast-balance.service -n 50 --no-pager
+```
+
+`enabled` と `active` が表示されることを確認してください。
+
+手動で1回だけ実行する場合：
+
+```bash
 sudo -u vast-revenue-monitor /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --config /opt/vast-revenue-monitor/config.json --once
+```
+
+バージョン確認：
+
+```bash
 sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --version
 ```
 
-## インストール後の再設定
+### Vast.ai APIのレスポンス形式に関するエラー
+
+`VastApiSchemaError` が出た場合、サービス自体は動作していますが、Vast.ai から返ってきた JSON に、このバージョンが期待する収益フィールドが含まれていません。
+
+エラー発生時は、完全なレスポンスが権限を制限した状態で次の場所に保存されます。
+
+```text
+/opt/vast-revenue-monitor/logs/api_response.json
+```
+
+インストール中に失敗した場合は、次の場所に残ります。
+
+```text
+/tmp/vast-revenue-monitor-api_response.json
+```
+
+内容を確認する例：
+
+```bash
+sudo python3 -m json.tool /tmp/vast-revenue-monitor-api_response.json
+sudo journalctl -u vast-balance.service -n 100 -l --no-pager
+```
+
+### 自動インストール（非対話モード）
+
+環境変数で認証情報を渡してインストールできます。
+
+```bash
+export DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/.../...'
+export VAST_API_KEY='your-vast-api-key'
+export NOTIFICATION_LANGUAGE=ja   # 任意。en（デフォルト）または ja
+sudo --preserve-env=DISCORD_WEBHOOK_URL,VAST_API_KEY,NOTIFICATION_LANGUAGE bash install.sh
+unset DISCORD_WEBHOOK_URL VAST_API_KEY
+```
+
+`NOTIFICATION_LANGUAGE` を指定しない場合は英語になります。
+
+## アップデート方法
+
+対象のリリースを取得したうえで、インストールと同じコマンドを再実行します。
+
+```bash
+sudo bash install.sh
+```
+
+既存の `config.json`、`state/`、`logs/`、履歴、記録、為替キャッシュは保持されます。活性化に失敗した場合は以前のバージョンにロールバックされます。
+
+通常のアップグレードでは既存の `config.json` は上書きされず、言語選択画面も表示されません。
+
+## 設定項目
+
+設定ファイルの場所：`/opt/vast-revenue-monitor/config.json`
+
+- `weekly_goal_usd`：週間目標（正の小数）
+- `language`：`en` または `ja`
+
+古い設定に `language` がない場合、または未対応の値が入っている場合は英語になります（警告後）。
+
+### 再設定（週間目標と言語のみ）
 
 ```bash
 sudo /opt/vast-revenue-monitor/reconfigure.sh
 ```
 
-現在の週間目標と言語を表示し、Enter なら維持します。`1`/`en` は英語、`2`/`ja` は日本語です。提案内容を確認してから書き込みます。APIキー、Webhook、未知のキー、状態、履歴、記録は変更・表示せず、原子的に設定を書き、成功後だけ `vast-balance.service` を再起動します。言語変更で収益履歴はリセットされません。ゼロ、負数、不正文字、NaN、無限値は拒否されます。
+現在の週間目標と言語を表示します。Enter で維持、`1` / `en` で英語、`2` / `ja` で日本語を選択できます。提案内容を確認してから書き込みます。
 
-## バックアップ、復元、削除、更新
+API キー、Webhook、未知のキー、状態、履歴、記録は変更・表示しません。原子的に設定を書き込み、成功した場合のみ `vast-balance.service` を再起動します。言語を変更しても収益履歴はリセットされません。ゼロ、負数、不正な文字、NaN、無限値は拒否されます。
 
-```bash
-sudo /opt/vast-revenue-monitor/install.sh --backup
-sudo /opt/vast-revenue-monitor/install.sh --restore /path/to/vast-revenue-monitor-backup-YYYYMMDD-HHMMSS.tar.gz
-sudo /opt/vast-revenue-monitor/uninstall.sh
-```
+## 収益の計算方法
 
-バックアップには API キー、Webhook、収益履歴が含まれるため、`0600`、暗号化、安全な場所で保管し公開しないでください。旧バックアップの `language` 欠落にも対応します。更新は対象リリースを取得して `sudo bash install.sh` を再実行します。設定、状態、履歴、記録、為替キャッシュ、ログは維持されます。
+Vast.ai の current-user エンドポイントは週間の `balance` を提供します。時間・日・週・月の収益合計は直接提供されないため、本ツールは連続したバランスのサンプルを `state/` に保存し、正の差分だけを収益として集計します。
 
-## トラブルシューティングとセキュリティ
+「直近区間」（英語表示では Hourly）は、最新の正常な観測で得た正の増加額そのものです。
 
-`sudo journalctl -u vast-balance.service -n 100 -l` と `/opt/vast-revenue-monitor/logs/vast-revenue-monitor.log` を確認してください。API スキーマ異常は権限制限された `logs/api_response.json` に保存されます。再起動失敗時は `sudo systemctl restart vast-balance.service` を実行します。設定を公開せず、漏えい時は両方の資格情報をローテーションしてください。サービスは専用ユーザーで動作します。
+## Discord通知の内容
 
-## 日本語通知例
+日本語通知の例：
 
 ```text
 💰 VAST.AI 毎時収益レポート
@@ -88,6 +199,49 @@ sudo /opt/vast-revenue-monitor/uninstall.sh
 Vast Revenue Monitor v1.0.1
 ```
 
+## 保存されるデータ
+
+- 設定：`/opt/vast-revenue-monitor/config.json`
+- 状態・履歴：`state/`
+- ログ：`logs/`
+
+## サービス操作
+
+```bash
+sudo systemctl status vast-balance.service
+sudo systemctl restart vast-balance.service
+sudo journalctl -u vast-balance.service -f
+```
+
+## バックアップ・復元・アンインストール
+
+```bash
+sudo /opt/vast-revenue-monitor/install.sh --backup
+sudo /opt/vast-revenue-monitor/install.sh --restore /path/to/vast-revenue-monitor-backup-YYYYMMDD-HHMMSS.tar.gz
+sudo /opt/vast-revenue-monitor/uninstall.sh
+```
+
+バックアップには API キー、Webhook、収益履歴が含まれるため、権限 `0600` で暗号化し、安全な場所に保管してください。公開しないでください。旧バックアップで `language` が欠けている場合にも対応しています。
+
+## トラブルシューティングとセキュリティ
+
+ログの確認：
+
+```bash
+sudo journalctl -u vast-balance.service -n 100 -l
+```
+
+アプリケーションログ：
+
+```text
+/opt/vast-revenue-monitor/logs/vast-revenue-monitor.log
+```
+
+再起動に失敗した場合は `sudo systemctl restart vast-balance.service` を実行してください。
+
+設定ファイルを公開しないでください。漏洩が疑われる場合は、Discord Webhook と Vast.ai API キーの両方をローテーションしてください。サービスは専用ユーザーで動作します。
+
 ## 免責事項
 
 無保証で提供されます。Vast.ai の公式値と照合してください。会計、税務、投資・金融助言ではありません。
+```
