@@ -1,10 +1,14 @@
 # vast-revenue-monitor
 
+English | [日本語](README.ja.md)
+
+**Current Stable Release: v1.0.0**
+
 Production-ready Python 3.12+ service for monitoring Vast.ai revenue and posting hourly Discord webhook embed reports in USD and JPY.
 
 ## Features
 
-- Hourly, daily, weekly, and monthly revenue reporting.
+- Latest-interval (“Hourly”), daily, weekly, and monthly revenue reporting in English or Japanese. Hourly is the actual positive increment in the newest successful monitoring interval; it is not a normalized hourly rate.
 - Live USDJPY conversion using three providers with persistent fallback cache.
 - Professional Discord embeds with amount and percentage changes.
 - Persistent records for highest hourly, daily, weekly, and monthly revenue.
@@ -149,7 +153,8 @@ For unattended installation, pass credentials through `sudo --preserve-env`:
 ```bash
 export DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/.../...'
 export VAST_API_KEY='your-vast-api-key'
-sudo --preserve-env=DISCORD_WEBHOOK_URL,VAST_API_KEY bash install.sh
+export NOTIFICATION_LANGUAGE=ja # optional: en (default) or ja
+sudo --preserve-env=DISCORD_WEBHOOK_URL,VAST_API_KEY,NOTIFICATION_LANGUAGE bash install.sh
 unset DISCORD_WEBHOOK_URL VAST_API_KEY
 ```
 
@@ -175,6 +180,7 @@ Copy `config.example.json` to `config.json` for local development. Configure:
 - `daily_goal_usd`: Daily revenue target, default `120`.
 - `weekly_goal_usd`: independent weekly target, prompted during installation and
   defaulting to `1000` USD.
+- `language`: Discord notification language, `en` (default) or `ja`.
 - `detailed_report`: `false` sends the compact hourly report; `true` adds changes
   and daily-goal pace details.
 - `timezone`: IANA timezone, default `Asia/Tokyo`.
@@ -289,13 +295,15 @@ confirmation.
 ## Reconfigure without reinstalling
 
 ```bash
-cd ~/vast-revenue-monitor
-sudo bash install.sh --reconfigure
+sudo /opt/vast-revenue-monitor/reconfigure.sh
+# Backward-compatible alias:
+sudo /opt/vast-revenue-monitor/install.sh --reconfigure
 ```
 
-This securely re-prompts for the Discord webhook and Vast.ai API key, then asks for
-the weekly goal, optional comma-separated exchange API URLs, and compact/detailed
-report mode. The configuration is atomically replaced and the service restarted.
+This displays the current Weekly Goal and notification language, preserves either
+value when Enter is pressed, and asks for confirmation. Only `weekly_goal_usd` and
+`language` are atomically updated; credentials, unknown keys, state, and history
+remain unchanged. The service is restarted only after a successful write.
 
 ## Backup and restore commands
 
@@ -375,4 +383,39 @@ Run tests locally with:
 ```bash
 pip install 'pytest>=8.3.2,<9'
 pytest
+```
+
+## Post-install operation and reconfiguration
+
+Run an immediate report with `sudo -u vast-revenue-monitor /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --config /opt/vast-revenue-monitor/config.json --once`. Check the installed CLI with `sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --version`.
+
+Change the Weekly Goal or notification language later with:
+
+```bash
+sudo /opt/vast-revenue-monitor/reconfigure.sh
+```
+
+The tool shows current values, accepts Enter to preserve either setting, reviews the proposal, and writes atomically only after confirmation. It preserves credentials, unknown settings, and every state/history file, then restarts `vast-balance.service`. Decimal positive goals are accepted; zero, negative, malformed, NaN, and infinite values are rejected. Choose `1`/`en` or `2`/`ja`.
+
+### Supported backup, restore, and uninstall
+
+```bash
+sudo /opt/vast-revenue-monitor/install.sh --backup
+sudo /opt/vast-revenue-monitor/install.sh --restore /path/to/vast-revenue-monitor-backup-YYYYMMDD-HHMMSS.tar.gz
+sudo /opt/vast-revenue-monitor/uninstall.sh
+```
+
+Backups contain API credentials, the Discord webhook, and revenue history: keep them encrypted and mode `0600`, and never post them publicly. Restore accepts older compatible configurations without a `language` key (English is used). Ordinary upgrades use a fresh checkout of the desired release and `sudo bash install.sh`; existing configuration, state, history, records, logs, and exchange-rate cache are preserved.
+
+### Troubleshooting, security, and disclaimer
+
+Configuration is `/opt/vast-revenue-monitor/config.json`; runtime data is under `state/`, logs under `logs/`, and service logs are available with `sudo journalctl -u vast-balance.service`. If a restart fails, run `sudo systemctl restart vast-balance.service` and inspect the journal. Keep config and backups private, rotate credentials after suspected exposure, and do not run the service as root. Vast Revenue Monitor is provided without warranty; verify values against Vast.ai and do not treat reports as accounting, tax, or financial advice.
+
+### English notification example
+
+```text
+💰 VAST.AI HOURLY REPORT
+Revenue — Hourly $5.36 · Daily $20.00 · Weekly $95.00
+Weekly Goal — Current $95.00 · Goal $100.00 · Remaining to Goal $5.00
+Vast Revenue Monitor v1.0.0
 ```

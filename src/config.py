@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,7 @@ class AppConfig:
     state_dir: Path
     log_dir: Path
     request_timeout_seconds: int
+    language: str = "en"
 
     @classmethod
     def load(cls, path: Path) -> "AppConfig":
@@ -90,6 +92,7 @@ class AppConfig:
             state_dir=Path(str(raw.get("state_dir", "state"))),
             log_dir=Path(str(raw.get("log_dir", "logs"))),
             request_timeout_seconds=int(raw.get("request_timeout_seconds", 30)),
+            language=cls._language(raw.get("language", "en")),
         )
         cls._validate(config)
         return config
@@ -146,3 +149,13 @@ class AppConfig:
         if isinstance(value, bool):
             return value
         raise ValueError("detailed_report must be true or false")
+
+    @staticmethod
+    def _language(value: object) -> str:
+        language = str(value)
+        if language not in {"en", "ja"}:
+            logging.getLogger(__name__).warning(
+                "Unsupported notification language %r; falling back to English", value
+            )
+            return "en"
+        return language

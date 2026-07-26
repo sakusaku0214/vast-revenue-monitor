@@ -50,11 +50,12 @@ usage() {
 Usage: sudo bash install.sh [--check]
 
   --check   Validate the host and source tree without changing the system.
-  --reconfigure  Update credentials, weekly goal, exchange APIs, and report detail.
+  --reconfigure  Update the weekly goal and notification language.
   --backup       Back up config and state to a timestamped tar.gz.
   --restore FILE Restore config and state from a backup archive.
 
 For unattended installation, set DISCORD_WEBHOOK_URL and VAST_API_KEY.
+Set NOTIFICATION_LANGUAGE=en or ja to select the notification language.
 Without them, a new installation prompts securely for both values.
 EOF
 }
@@ -185,43 +186,9 @@ if [[ "${MODE}" == "restore" ]]; then
 fi
 
 if [[ "${MODE}" == "reconfigure" ]]; then
-  [[ -f "${APP_DIR}/config.json" ]] || fail "application is not installed"
-  CONFIG_BACKUP="$(mktemp /tmp/vast-config.XXXXXX.json)"
-  cp -a "${APP_DIR}/config.json" "${CONFIG_BACKUP}"
-  read_secret_twice "Discord webhook URL" DISCORD_WEBHOOK_URL
-  read_secret_twice "Vast.ai API key" VAST_API_KEY
-  read -r -p 'Weekly revenue goal (USD) [1000]: ' WEEKLY_GOAL_USD
-  WEEKLY_GOAL_USD="${WEEKLY_GOAL_USD:-1000}"
-  read -r -p 'Exchange API URLs, comma-separated [keep current]: ' EXCHANGE_API_URLS
-  read -r -p 'Detailed report? [y/N]: ' detailed_answer
-  DETAILED_REPORT=false
-  [[ "${detailed_answer:-}" =~ ^[Yy]$ ]] && DETAILED_REPORT=true
-  export DISCORD_WEBHOOK_URL VAST_API_KEY WEEKLY_GOAL_USD EXCHANGE_API_URLS DETAILED_REPORT
-  python3.12 - "${APP_DIR}/config.json" <<'PY'
-import json, os, sys, tempfile
-from pathlib import Path
-path = Path(sys.argv[1]); data = json.loads(path.read_text(encoding="utf-8"))
-data.update(discord_webhook_url=os.environ["DISCORD_WEBHOOK_URL"],
-            vast_api_key=os.environ["VAST_API_KEY"],
-            weekly_goal_usd=float(os.environ["WEEKLY_GOAL_USD"]),
-            detailed_report=os.environ["DETAILED_REPORT"] == "true")
-if os.environ["EXCHANGE_API_URLS"].strip():
-    data["exchange_api_urls"] = [u.strip() for u in os.environ["EXCHANGE_API_URLS"].split(",") if u.strip()]
-fd, name = tempfile.mkstemp(dir=path.parent); os.close(fd)
-Path(name).write_text(json.dumps(data, indent=2) + "\n")
-Path(name).chmod(0o640); Path(name).replace(path)
-PY
-  chown "root:${SERVICE_USER}" "${APP_DIR}/config.json"
-  (cd "${APP_DIR}" && .venv/bin/python -c \
-    'from pathlib import Path; from src.config import AppConfig; AppConfig.load(Path("config.json"))')
-  systemctl stop "${SERVICE_FILE}" 2>/dev/null || true
-  (cd "${APP_DIR}" && runuser --user "${SERVICE_USER}" -- \
-    .venv/bin/python balance.py --config config.json --validate)
-  systemctl restart "${SERVICE_FILE}"
-  rm -f "${CONFIG_BACKUP}"; CONFIG_BACKUP=""
-  log "Configuration updated and service restarted."
+  [[ -x "${APP_DIR}/reconfigure.sh" ]] || fail "installed reconfiguration command is missing"
   INSTALL_COMMITTED=true
-  exit 0
+  exec "${APP_DIR}/reconfigure.sh"
 fi
 
 if [[ "${DRY_RUN}" == true ]]; then
@@ -284,7 +251,7 @@ else
   read -r -p 'Detailed report? [y/N]: ' detailed_answer
   DETAILED_REPORT=false
   [[ "${detailed_answer:-}" =~ ^[Yy]$ ]] && DETAILED_REPORT=true
-  export DISCORD_WEBHOOK_URL VAST_API_KEY WEEKLY_GOAL_USD DETAILED_REPORT
+  export DISCORD_WEBHOOK_URL VAST_API_KEY WEEKLY_GOAL_USD DETAILED_REPORT NOTIFICATION_LANGUAGE
   cp -- "${STAGING_DIR}/config.example.json" "${STAGING_DIR}/config.json"
   "${STAGING_DIR}/.venv/bin/python" - "${STAGING_DIR}/config.json" <<'PY'
 import json
@@ -297,6 +264,7 @@ config = json.loads(path.read_text(encoding="utf-8"))
 config["discord_webhook_url"] = os.environ["DISCORD_WEBHOOK_URL"]
 config["vast_api_key"] = os.environ["VAST_API_KEY"]
 config["weekly_goal_usd"] = float(os.environ["WEEKLY_GOAL_USD"])
+config["language"] = os.environ["NOTIFICATION_LANGUAGE"]
 config["detailed_report"] = os.environ["DETAILED_REPORT"] == "true"
 path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 PY

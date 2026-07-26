@@ -12,6 +12,7 @@
   "_comment_goal": "Daily goal is evaluated on a business day from 09:00 JST to 09:00 JST next day.",
   "daily_goal_usd": 120.0,
   "weekly_goal_usd": 1000.0,
+  "language": "en",
   "detailed_report": false,
   "timezone": "Asia/Tokyo",
 
