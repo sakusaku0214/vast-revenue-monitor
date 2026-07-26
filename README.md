@@ -1,6 +1,10 @@
 # vast-revenue-monitor
 
-<img width="465" height="415" alt="github" src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3"
+       alt="Vast Revenue Monitor Discord notification"
+       width="465">
+</p>
 
 
 English | [日本語](README.ja.md)
@@ -41,7 +45,7 @@ HTTPS clone URL shown by GitHub's **Code** button.
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
-git clone <repository-url> vast-revenue-monitor
+git clone https://github.com/sakusaku0214/vast-revenue-monitor.git
 cd vast-revenue-monitor
 ```
 
