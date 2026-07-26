@@ -1,6 +1,6 @@
 # vast-revenue-monitor
 
-<p align="center">
+<p>
   <img src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3"
        alt="Vast Revenue Monitor Discord notification"
        width="465">
