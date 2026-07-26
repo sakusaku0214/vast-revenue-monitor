@@ -1,5 +1,8 @@
 # vast-revenue-monitor
 
+<img width="465" height="415" alt="github" src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3" />
+
+
 English | [日本語](README.ja.md)
 
 **Current Stable Release: v1.0.0**
