@@ -2,6 +2,11 @@
 
 [English](README.md) | 日本語
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3"
+       alt="Vast Revenue Monitor Discord notification>
+</p>
+
 **現在の安定版: v1.0.0**
 
 Vast.ai の残高増加から収益を計算し、USD/JPY の Discord Embed を systemd で定期送信する運用向けモニターです。
