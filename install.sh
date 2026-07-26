@@ -45,6 +45,30 @@ read_secret_twice() {
   printf -v "${output_name}" '%s' "${first}"
 }
 
+stdin_is_interactive() {
+  [[ -t 0 ]]
+}
+
+select_notification_language() {
+  if [[ ${NOTIFICATION_LANGUAGE+x} == x ]]; then
+    case "${NOTIFICATION_LANGUAGE}" in
+      en|ja) return ;;
+      *) fail "NOTIFICATION_LANGUAGE must be en or ja (got: ${NOTIFICATION_LANGUAGE:-<empty>})" ;;
+    esac
+  fi
+  if ! stdin_is_interactive; then
+    NOTIFICATION_LANGUAGE=en
+    return
+  fi
+  printf 'Select Discord notification language:\n1) English\n2) 日本語\n' >&2
+  read -r -p 'Choice [1]: ' language_answer
+  case "${language_answer,,}" in
+    ""|1|en) NOTIFICATION_LANGUAGE=en ;;
+    2|ja) NOTIFICATION_LANGUAGE=ja ;;
+    *) fail "Notification language must be 1, 2, en, or ja" ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage: sudo bash install.sh [--check]
@@ -56,7 +80,7 @@ Usage: sudo bash install.sh [--check]
 
 For unattended installation, set DISCORD_WEBHOOK_URL and VAST_API_KEY.
 Set NOTIFICATION_LANGUAGE=en or ja to select the notification language.
-Without them, a new installation prompts securely for both values.
+Without the credentials, a new interactive installation prompts securely for both values.
 EOF
 }
 
@@ -246,11 +270,16 @@ else
     [[ -t 0 ]] || fail "Set VAST_API_KEY for non-interactive installation"
     read_secret_twice "Vast.ai API key" VAST_API_KEY
   fi
-  read -r -p 'Weekly revenue goal (USD) [1000]: ' WEEKLY_GOAL_USD
-  WEEKLY_GOAL_USD="${WEEKLY_GOAL_USD:-1000}"
-  read -r -p 'Detailed report? [y/N]: ' detailed_answer
+  WEEKLY_GOAL_USD=1000
+  detailed_answer=""
+  if stdin_is_interactive; then
+    read -r -p 'Weekly revenue goal (USD) [1000]: ' WEEKLY_GOAL_USD
+    WEEKLY_GOAL_USD="${WEEKLY_GOAL_USD:-1000}"
+    read -r -p 'Detailed report? [y/N]: ' detailed_answer
+  fi
   DETAILED_REPORT=false
   [[ "${detailed_answer:-}" =~ ^[Yy]$ ]] && DETAILED_REPORT=true
+  select_notification_language
   export DISCORD_WEBHOOK_URL VAST_API_KEY WEEKLY_GOAL_USD DETAILED_REPORT NOTIFICATION_LANGUAGE
   cp -- "${STAGING_DIR}/config.example.json" "${STAGING_DIR}/config.json"
   "${STAGING_DIR}/.venv/bin/python" - "${STAGING_DIR}/config.json" <<'PY'

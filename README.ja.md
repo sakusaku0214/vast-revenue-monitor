@@ -8,7 +8,7 @@
        width="465">
 </p>
 
-**現在の安定版: v1.0.0**
+**現在の安定版: v1.0.1**
 
 Vast.ai の残高増加から収益を計算し、USD/JPY の Discord Embed を systemd で定期送信する運用向けモニターです。
 
@@ -41,7 +41,7 @@ Select Discord notification language:
 Choice [1]:
 ```
 
-非対話では `DISCORD_WEBHOOK_URL`、`VAST_API_KEY` と任意の `NOTIFICATION_LANGUAGE=ja` を `sudo --preserve-env` で渡します。通常アップグレードで既存 `config.json` は上書きされません。
+非対話では必須の `DISCORD_WEBHOOK_URL`、`VAST_API_KEY` と任意の `NOTIFICATION_LANGUAGE`（`en` または `ja`、未設定時は `en`）を `sudo --preserve-env` で渡します。通常アップグレードで既存 `config.json` は上書きされず、言語選択も表示されません。
 
 ## 設定と運用
 
@@ -83,7 +83,7 @@ sudo /opt/vast-revenue-monitor/uninstall.sh
 💰 VAST.AI 毎時収益レポート
 収益 — 直近区間 $5.36 · 本日 $20.00 · 今週 $95.00
 週間目標 — 現在 $95.00 · 目標 $100.00 · 目標まで残り $5.00
-Vast Revenue Monitor v1.0.0
+Vast Revenue Monitor v1.0.1
 ```
 
 ## 免責事項

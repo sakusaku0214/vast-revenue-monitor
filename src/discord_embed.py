@@ -12,6 +12,7 @@ from urllib3.util.retry import Retry
 
 from src.models import Change, GoalStatus, Period, RecordBreak, ReportStatus, RevenueSnapshot
 from src.i18n import PERIOD, translations
+from src.version import VERSION
 
 COLOR_BY_STATUS = {
     ReportStatus.NORMAL: 0x2ECC71,
@@ -140,7 +141,7 @@ class DiscordNotifier:
             "title": self.t["title"],
             "color": COLOR_BY_STATUS[status],
             "fields": fields,
-            "footer": {"text": "Vast Revenue Monitor v1.0.0"},
+            "footer": {"text": f"Vast Revenue Monitor v{VERSION}"},
         }
 
     def _simple_revenue_fields(

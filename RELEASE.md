@@ -1,3 +1,3 @@
-# Vast Revenue Monitor v1.0.0
+# Vast Revenue Monitor v1.0.1
 
-The first public release reports Hourly as the newest successful interval rather than a rolling window. It adds decimal Weekly Goal reconfiguration, a safe post-install interactive reconfiguration command, English/Japanese Discord notifications with post-install switching, and English/Japanese operator guides. Configuration, state, history, records, cached rates, backup compatibility, and Saturday reset behavior remain intact.
+This hotfix prevents fresh installations from referencing `NOTIFICATION_LANGUAGE` before it is assigned. Interactive first installs now select English or Japanese after the Weekly Goal and Detailed Report questions, defaulting to English on Enter. Unattended installs accept `en` or `ja` and safely default to English when the variable is unset. Upgrades continue preserving existing configuration without a language prompt.
