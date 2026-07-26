@@ -1,16 +1,18 @@
 # vast-revenue-monitor
 
-[English](README.md) | 日本語
-
 <p align="center">
   <img src="https://github.com/user-attachments/assets/4698af2b-3d8e-4d86-b5d8-8344717fcea3"
        alt="Vast Revenue Monitor Discord notification"
        width="465">
 </p>
 
+[English](README.md) | 日本語
+
 **現在の安定版: v1.0.1**
 
-Vast.ai の残高増加から収益を計算し、USD/JPY の Discord Embed を systemd で定期送信する運用向けモニターです。
+**Vast.aiの収益を自動で監視し、Discordへ見やすい収益通知を送信するためのモニタリングサービスです。**
+
+Python 3.12以降対応。Discordへの日英バイリンガル通知、収益履歴、最高記録、週間目標管理、為替換算などを備えた本番運用向けツールです
 
 ## 機能
 
