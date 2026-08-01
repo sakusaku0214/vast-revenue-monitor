@@ -1,59 +1,178 @@
-# vast.ai-revenue-monitor
+# vast-revenue-monitor
 
-<img width="400" alt="image" src="https://github.com/user-attachments/assets/098a47d2-8ad1-4c83-81de-55ef7a8cfc94" />
+<p align="center">
+  <img
+    src="https://github.com/user-attachments/assets/098a47d2-8ad1-4c83-81de-55ef7a8cfc94"
+    alt="Vast Revenue Monitor Discord notification"
+    width="400"
+  >
+</p>
 
-[English](README.md) | 日本語
+<p align="center">
+  <strong>Vast.aiホストの収益を監視し、Discordへ自動通知する運用向けツール</strong>
+</p>
 
-**現在の安定版: v1.1.2**
+<p align="center">
+  <a href="README.md">English</a> | 日本語
+</p>
+
+**現在の安定版：v1.1.2**
 
 ## 概要
 
-Vast.aiホスト向けの収益監視・Discord通知ツールです。Vast.ai APIから収益情報を定期的に取得し、時間・日・週・月ごとの収益や最高記録、目標の進捗をDiscord Embedで通知します。
+Vast Revenue Monitorは、Vast.aiホストの収益状況を定期的に取得し、Discordへ自動通知する監視サービスです。
 
-Python 3.12以降に対応した本番運用向けのサービスです。日本語と英語の両方の通知に対応しています。
+直近区間、本日、昨日、今週、今月の収益に加え、週間目標の進捗、USD/JPY換算、ATH（過去最高記録）を表示します。
+
+日次はJST 09:00、週次は土曜日09:00を境界として集計します。Vast.aiの支払リセットが遅れた場合も、実際の残高減少を確認してから週を確定するため、境界時刻のずれによる誤集計を防ぎます。
+
+Python 3.12以降に対応し、systemdサービスとして常時運用できます。Discord通知は日本語と英語に対応しています。
 
 ## 主な機能
 
-- 直近区間（英語表示では Hourly）、本日、今週、今月の収益を通知
-- USD/JPY の為替レートを複数のプロバイダーから取得し、永続キャッシュを利用
-- 週間目標の進捗管理と最高記録の更新通知
-- 詳細レポート、GPU/API 警告
-- 土曜日 09:00 JST 付近での週間リセット
-- 履歴・状態の原子的な保存
-- 通知言語：英語 (`en`) / 日本語 (`ja`)
+- Vast.ai収益の定期取得とDiscord Embed通知
+- 直近区間、本日、昨日、今週、今月の収益表示
+- USD/JPY換算と複数為替プロバイダーによる取得
+- 週間収益目標の進捗表示
+- Hourly / Daily / Weekly / Monthly ATH
+- 簡易レポートと詳細レポート
+- 日本語・英語通知
+- systemdによる自動起動と常時監視
+- 原子的な状態保存
+- バックアップ、復元、アンインストール
+- 安全な1コマンドアップデート
+- 明示的な状態修復機能
 
-「直近区間」は、最新の正常な観測で得られた正の増加額そのものです。60分の移動合計でも、時間換算・補正したレートでもありません。短い手動区間や遅延があった場合も、実際の増加額を表示します。
+## Discord通知の内容
+
+### 簡易レポート
+
+```text
+💰 VAST.AI 毎時収益レポート
+
+収益
+直近区間 $5.36 / ¥849
+本日 $82.31 / ¥13,049
+昨日 $124.39 / ¥19,721
+今週 $82.31 / ¥13,049
+今月 $997.27 / ¥158,105
+
+週間目標
+現在: $82.31
+目標: $900.00
+進捗: 9.1%
+目標まで残り: $817.69
+
+ATH
+時間: $6.46
+日間: $143.98
+週間: $914.96
+月間: $0.00
+```
+
+### 詳細レポート
+
+詳細レポートを有効にすると、次の情報も追加されます。
+
+- 前回通知からの増減額と増減率
+- 日間目標の進捗
+- 現在の進捗率と期待進捗率
+- 目標に対する先行・遅延
+- 日間収益の最終予測
+- 現在の状態
+
+## 収益期間の定義
+
+すべての境界は、設定されたタイムゾーンを基準にします。既定値は `Asia/Tokyo` です。
+
+| 表示 | 定義 |
+|---|---|
+| 直近区間 | 最新の正常な取得区間で確認された正の残高差分 |
+| 本日 | 当日09:00から現在まで |
+| 昨日 | 直前に完了した09:00から翌09:00まで |
+| 今週 | 土曜日09:00から現在までの進行中の支払週 |
+| 今月 | その月に属する完了支払週と、現在進行中の支払週の合計 |
+
+「直近区間」は60分の移動合計や時間換算レートではありません。前回の正常取得から今回の取得までに実際に増えた金額を表示します。
+
+### 日次
+
+日次期間は次のとおりです。
+
+```text
+09:00:00 ～ 翌日08:59:59
+```
+
+本日は現在進行中の日次期間です。
+
+昨日は直前に完了した日次期間で、次の09:00まで変化しません。
+
+### 週次
+
+週次期間は次のとおりです。
+
+```text
+土曜日09:00:00 ～ 翌週土曜日08:59:59
+```
+
+Vast.aiの支払リセットが09:00より遅れる場合があります。
+
+そのため、本ツールは時刻だけで週次リセットを確定しません。土曜日09:00以降に実際の残高減少を確認した時点で、直前の残高を完了週として確定します。
+
+### 月次
+
+月間収益は暦日の単純合計ではなく、Vast.aiの支払週を基準に計算します。
+
+週は、その週が完了した土曜日の属する月へ計上されます。
+
+そのため、月によって支払週が4回または5回になります。これは意図した動作です。
+
+## ATHの定義
+
+ATHはAll Time High、つまり過去最高記録です。
+
+| ATH | 更新条件 |
+|---|---|
+| Hourly | 有効な直近区間が過去最高を更新したとき |
+| Daily | 09:00から翌09:00までの日次期間が完了したとき |
+| Weekly | 土曜日から翌土曜日までの支払週が完了したとき |
+| Monthly | 支払月が完了したとき |
+
+Hourly ATHは有効な正の `increment` だけから計算します。口座残高そのものは使用しません。
+
+Daily、Weekly、Monthly ATHは、進行中の期間では更新されません。完了した期間だけが比較対象です。
 
 ## Ubuntu 24.04 LTSへのインストール
 
 ### 事前に準備するもの
 
-以下が必要です。
-
-- Ubuntu 24.04 LTS サーバ（DNS と HTTPS 接続が動作していること）
+- Ubuntu 24.04 LTSサーバ
 - `sudo` 権限を持つユーザー
-- Discord Webhook URL（通知先チャンネル用）
-- Vast.ai API キー
+- Discord Webhook URL
+- Vast.ai APIキー
+- DNSとHTTPS接続が正常に動作する環境
 
-Python のインストールや仮想環境の作成、systemd の手動設定は不要です。インストーラーがすべて自動で行います。
+Pythonのインストール、仮想環境の作成、systemd設定はインストーラーが自動で行います。
 
 ### リポジトリを取得する
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git
+sudo apt-get update
+sudo apt-get install -y git
+
 git clone https://github.com/sakusaku0214/vast-revenue-monitor.git
 cd vast-revenue-monitor
 ```
 
 ### インストール前の確認（任意）
 
-ファイルを変更せずに、リポジトリとホスト環境をチェックできます。
+ファイルを変更せずに、リポジトリとホスト環境を検証できます。
 
 ```bash
 sudo bash install.sh --check
 ```
 
-最後に次のメッセージが表示されれば成功です。
+次のメッセージが表示されれば成功です。
 
 ```text
 [vast-revenue-monitor] Validation completed; no changes were made.
@@ -67,11 +186,15 @@ sudo bash install.sh
 
 対話形式で次の情報を入力します。
 
-- Discord Webhook URL（画面に表示されず、2回入力）
-- Vast.ai APIキー（画面に表示されず、2回入力）
-- 週間収益目標（$）
-- 詳細レポートを有効にするか（既定値：無効）
-- 通知言語（Enterで英語）
+- Discord Webhook URL
+- Vast.ai APIキー
+- 週間収益目標
+- 詳細レポートの有効・無効
+- 通知言語
+
+Webhook URLとAPIキーは画面に表示されず、それぞれ2回入力して確認します。
+
+通知言語の選択例：
 
 ```text
 Select Discord notification language:
@@ -80,7 +203,17 @@ Select Discord notification language:
 Choice [1]:
 ```
 
-インストール中に Vast.ai API、為替レート取得先、Discord Webhook の検証が行われます。検証に失敗した場合はインストールが中断され、不完全な状態はロールバックされます。
+Enterのみで英語を選択します。
+
+インストール中に次の項目を検証します。
+
+- Vast.ai API
+- 為替レート取得先
+- Discord Webhook
+- Python依存関係
+- systemdサービス
+
+検証に失敗した場合はインストールを中断し、不完全な状態をロールバックします。
 
 成功すると次のメッセージが表示されます。
 
@@ -88,7 +221,7 @@ Choice [1]:
 [vast-revenue-monitor] Installation completed successfully.
 ```
 
-### 動作を確認する
+## 動作確認
 
 ```bash
 sudo systemctl is-enabled vast-balance.service
@@ -99,188 +232,317 @@ sudo journalctl -u vast-balance.service -n 50 --no-pager
 
 `enabled` と `active` が表示されることを確認してください。
 
-手動で1回だけ実行する場合：
+### 手動で1回だけ実行する
 
 ```bash
-sudo -u vast-revenue-monitor /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --config /opt/vast-revenue-monitor/config.json --once
+sudo -u vast-revenue-monitor \
+  /opt/vast-revenue-monitor/.venv/bin/python \
+  /opt/vast-revenue-monitor/balance.py \
+  --config /opt/vast-revenue-monitor/config.json \
+  --once
 ```
 
-バージョン確認：
+### バージョンを確認する
 
 ```bash
-sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py --version
+sudo /opt/vast-revenue-monitor/.venv/bin/python \
+  /opt/vast-revenue-monitor/balance.py \
+  --version
 ```
 
-### Vast.ai APIのレスポンス形式に関するエラー
+## 設定変更
 
-`VastApiSchemaError` が出た場合、サービス自体は動作していますが、Vast.ai から返ってきた JSON に、このバージョンが期待する収益フィールドが含まれていません。
+インストール後に、週間目標、通知言語、詳細レポート設定を変更できます。
 
-エラー発生時は、完全なレスポンスが権限を制限した状態で次の場所に保存されます。
+```bash
+sudo /opt/vast-revenue-monitor/reconfigure.sh
+```
+
+現在値が表示され、Enterでその設定を維持できます。
+
+設定が実際に変更された場合だけ `vast-balance.service` を再起動します。変更後は確認用の通知が1回送信されます。
+
+APIキー、Discord Webhook、未知の設定キー、履歴、状態、記録は変更しません。
+
+## 設定ファイル
+
+設定ファイル：
 
 ```text
-/opt/vast-revenue-monitor/logs/api_response.json
+/opt/vast-revenue-monitor/config.json
 ```
 
-インストール中に失敗した場合は、次の場所に残ります。
+主な設定項目：
 
-```text
-/tmp/vast-revenue-monitor-api_response.json
-```
+| 設定 | 内容 |
+|---|---|
+| `weekly_goal_usd` | 週間収益目標 |
+| `daily_goal_usd` | 日間収益目標 |
+| `language` | `en` または `ja` |
+| `detailed_report` | 詳細レポートの有効・無効 |
+| `timezone` | 集計に使用するタイムゾーン |
+| `state_dir` | 状態・履歴の保存先 |
+| `log_dir` | ログの保存先 |
 
-内容を確認する例：
+`state_dir` と `log_dir` に相対パスを指定した場合は、実行時のカレントディレクトリではなく、`config.json` のあるディレクトリを基準に解決します。
 
-```bash
-sudo python3 -m json.tool /tmp/vast-revenue-monitor-api_response.json
-sudo journalctl -u vast-balance.service -n 100 -l --no-pager
-```
-
-### 自動インストール（非対話モード）
+## 自動インストール（非対話モード）
 
 環境変数で認証情報を渡してインストールできます。
 
 ```bash
 export DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/.../...'
 export VAST_API_KEY='your-vast-api-key'
-export NOTIFICATION_LANGUAGE=ja   # 任意。en（デフォルト）または ja
-sudo --preserve-env=DISCORD_WEBHOOK_URL,VAST_API_KEY,NOTIFICATION_LANGUAGE bash install.sh
-unset DISCORD_WEBHOOK_URL VAST_API_KEY
+export NOTIFICATION_LANGUAGE=ja
+
+sudo --preserve-env=DISCORD_WEBHOOK_URL,VAST_API_KEY,NOTIFICATION_LANGUAGE \
+  bash install.sh
+
+unset DISCORD_WEBHOOK_URL VAST_API_KEY NOTIFICATION_LANGUAGE
 ```
 
 `NOTIFICATION_LANGUAGE` を指定しない場合は英語になります。
 
-## アップデート方法
+## アップデート
 
-対象のリリースを取得したうえで、インストールと同じコマンドを再実行します。
-
-```bash
-git pull origin main
-sudo bash install.sh
-```
-
-既存の `config.json`、`state/`、`logs/`、履歴、記録、為替キャッシュは保持されます。活性化に失敗した場合は以前のバージョンにロールバックされます。
-
-通常のアップグレードでは既存の `config.json` は上書きされず、言語選択画面も表示されません。
-
-## 設定項目
-
-設定ファイルの場所：`/opt/vast-revenue-monitor/config.json`
-
-- `weekly_goal_usd`：週間目標（正の小数）
-- `language`：`en` または `ja`
-
-古い設定に `language` がない場合、または未対応の値が入っている場合は英語になります（警告後）。
-
-### 再設定（週間目標・言語・詳細レポート）
-
-```bash
-sudo /opt/vast-revenue-monitor/reconfigure.sh
-```
-
-現在の週間目標、言語、詳細レポート設定を表示します。Enter で各設定を維持、`1` / `en` で英語、`2` / `ja` で日本語を選択できます。提案内容を確認してから書き込みます。`detailed_report` が導入される前に作成されたインストールでは、変更するまで「無効」が既定値になります。
-
-API キー、Webhook、未知のキー、状態、履歴、記録は変更・表示しません。原子的に設定を書き込み、設定が実際に変更された場合のみ `vast-balance.service` を再起動します。言語を変更しても収益履歴はリセットされません。ゼロ、負数、不正な文字、NaN、無限値は拒否されます。
-
-## 収益の計算方法
-
-Vast.ai の current-user エンドポイントは週間の `balance` を提供します。時間・日・週・月の収益合計は直接提供されないため、本ツールは連続したバランスのサンプルを `state/` に保存し、正の差分だけを収益として集計します。
-
-「直近区間」（英語表示では Latest interval）は、最新の正常な観測で得た正の増加額そのものです。
-
-## Discord通知の内容
-
-日本語通知の例：
-
-```text
-💰 VAST.AI 毎時収益レポート
-収益 — 直近区間 $5.36 · 本日 $20.00 · 昨日 $18.00 · 今週 $95.00 · 今月 $380.00
-週間目標 — 現在 $95.00 · 目標 $100.00 · 目標まで残り $5.00
-Vast Revenue Monitor v1.1.2
-```
-
-## 保存されるデータ
-
-- 設定：`/opt/vast-revenue-monitor/config.json`
-- 状態・履歴：`state/`
-- ログ：`logs/`
-
-## サービス操作
-
-```bash
-sudo systemctl status vast-balance.service
-sudo systemctl restart vast-balance.service
-sudo journalctl -u vast-balance.service -f
-```
-
-## バックアップ・復元・アンインストール
-
-```bash
-sudo /opt/vast-revenue-monitor/install.sh --backup
-sudo /opt/vast-revenue-monitor/install.sh --restore /path/to/vast-revenue-monitor-backup-YYYYMMDD-HHMMSS.tar.gz
-sudo /opt/vast-revenue-monitor/uninstall.sh
-```
-バックアップにはAPIキー、Webhook、収益履歴が含まれます。
-ファイル権限を `0600` に設定し、安全な場所へ保管してください。
-必要に応じて、別途暗号化してください。
-
-## トラブルシューティングとセキュリティ
-
-ログの確認：
-
-```bash
-sudo journalctl -u vast-balance.service -n 100 -l
-```
-
-アプリケーションログ：
-
-```text
-/opt/vast-revenue-monitor/logs/vast-revenue-monitor.log
-```
-
-再起動に失敗した場合は `sudo systemctl restart vast-balance.service` を実行してください。
-
-設定ファイルを公開しないでください。漏洩が疑われる場合は、Discord Webhook と Vast.ai API キーの両方をローテーションしてください。サービスは専用ユーザーで動作します。
-
-## 免責事項
-
-無保証で提供されます。Vast.ai の公式値と照合してください。会計、税務、投資・金融助言ではありません。
-```
-
-## 収益期間と確定期間の ATH
-
-以下の境界はすべて JST です。
-
-* **直近区間**は最新の取得成功区間における残高の正の差分で、毎時更新します。
-* **本日**は 09:00 JST から現在までです。累積口座残高ではなく、現在残高から本日 09:00 境界の残高を引いた進行中の値です。**昨日**は直前に完了した 09:00〜09:00 の期間で、次の切り替えまで変化しません。
-* **今週**は土曜 09:00 から次の土曜 09:00 までの進行中の支払週です。支払リセットが遅れた場合は実際の残高減少を確認してから直前の残高を完了週として確定します。
-* **今月**は現在の支払月に属する完了支払週と進行中の支払週の合計です。週は完了する土曜日の月に属するため、支払月が 4 週または 5 週になることは意図した動作です。
-
-**ATH** 欄は「時間・日間・週間・月間」を表示します。時間 ATH は完了した最新取得区間から直ちに更新します。日間・週間・月間 ATH は進行中の値を使用せず、それぞれ完了した 09:00〜09:00 の日、完了した土曜〜土曜の支払週、完了した支払月だけから更新します。
-
-`state_dir` と `log_dir` の相対パスは、プロセスの作業ディレクトリではなく `config.json` があるディレクトリを基準に解決されます。
-
-### 明示的な状態修復
-
-修復コマンドは既定でドライランです。遅延リセットの破損に加え、保存済みスナップショットから再構築できる不正な時間・日間・週間・月間 ATH を検出します。時間 ATH は修正後の正の `increment` のみから再構築し、口座残高は使用しません。`--apply` を明示しない限りデータを書き換えません。
-
-```bash
-python3 balance.py --config /opt/vast-revenue-monitor/config.json --repair-state
-python3 balance.py --config /opt/vast-revenue-monitor/config.json --repair-state --apply
-```
-
-適用時は最初に状態ディレクトリの隣へ日時付き `repair-backup-*` を作り、`config.json` と状態ツリー全体を保存します。バックアップは実運用設定と同様に保護してください。
-
-## 安全なアップグレード
-
-推奨コマンドは Git チェックアウトを fast-forward のみで更新し、トランザクション対応インストーラーを実行します。
+推奨方法：
 
 ```bash
 cd ~/vast-revenue-monitor
 sudo ./update.sh
 ```
 
-変更しない確認には `sudo ./update.sh --check` を使用します。更新処理は追跡ファイルの未コミット変更を既定で拒否し、同時実行を防ぎ、prune 付き fetch と旧・新コミット表示を行います。rebase、force-reset、ユーザーファイル・ブランチ・タグの削除は行いません。通常の `git pull` だけでは root 所有の `/opt` は更新されません。手動手順は次のとおりです。
+`update.sh` は次の処理を行います。
+
+- Git作業ツリーの状態確認
+- `git fetch --prune`
+- fast-forward可能か確認
+- ソースコード更新
+- 既存のトランザクション型インストーラーを実行
+- `config.json`、`state/`、`logs/`を保持
+- 更新失敗時にインストール済みアプリをロールバック
+
+更新内容だけ確認する場合：
+
+```bash
+sudo ./update.sh --check
+```
+
+### 手動アップデート
 
 ```bash
 git pull --ff-only origin main
 sudo bash install.sh
 ```
+
+単純な `git pull` だけでは、`/opt/vast-revenue-monitor` にインストールされたアプリケーションは更新されません。
+
+## 状態修復
+
+既存の状態ファイルに、旧バージョン由来の誤った週次リセットやATHが残っている場合は、明示的な修復コマンドを使用できます。
+
+### ドライラン
+
+```bash
+sudo systemctl stop vast-balance.service
+
+sudo /opt/vast-revenue-monitor/.venv/bin/python \
+  /opt/vast-revenue-monitor/balance.py \
+  --config /opt/vast-revenue-monitor/config.json \
+  --repair-state
+```
+
+ドライランでは修正候補を表示するだけで、ファイルは変更しません。
+
+### 修復を適用する
+
+```bash
+sudo /opt/vast-revenue-monitor/.venv/bin/python \
+  /opt/vast-revenue-monitor/balance.py \
+  --config /opt/vast-revenue-monitor/config.json \
+  --repair-state \
+  --apply
+```
+
+適用前に、設定ファイルと状態ディレクトリのタイムスタンプ付きバックアップを作成します。
+
+修復対象：
+
+- 遅延した週次リセットによる誤った全残高加算
+- 不正なHourly ATH
+- 不正なDaily ATH
+- 不正なWeekly ATH
+- 不正なMonthly ATH
+
+修復後はサービスを再開します。
+
+```bash
+sudo systemctl start vast-balance.service
+sudo systemctl is-active vast-balance.service
+```
+
+証拠が不足している場合は推測で修正せず、曖昧な候補として報告します。
+
+## Vast.ai APIレスポンス形式のエラー
+
+`VastApiSchemaError` が出た場合、Vast.aiから返されたJSONに、このバージョンが期待する収益フィールドが含まれていません。
+
+通常運用中の完全なレスポンス：
+
+```text
+/opt/vast-revenue-monitor/logs/api_response.json
+```
+
+インストール中に失敗した場合：
+
+```text
+/tmp/vast-revenue-monitor-api_response.json
+```
+
+確認例：
+
+```bash
+sudo python3 -m json.tool \
+  /tmp/vast-revenue-monitor-api_response.json
+
+sudo journalctl \
+  -u vast-balance.service \
+  -n 100 \
+  -l \
+  --no-pager
+```
+
+これらのファイルには機密情報が含まれる可能性があります。公開しないでください。
+
+## 保存されるデータ
+
+| 種類 | 保存場所 |
+|---|---|
+| 設定 | `/opt/vast-revenue-monitor/config.json` |
+| 状態・履歴 | `/opt/vast-revenue-monitor/state/` |
+| ログ | `/opt/vast-revenue-monitor/logs/` |
+
+主な状態ファイル：
+
+- `revenue_events.json`
+- `history.json`
+- `history-YYYY.csv`
+- `records.json`
+- `weekly_reset.json`
+- `exchange_rate.json`
+- `goal.json`
+
+## サービス操作
+
+状態確認：
+
+```bash
+sudo systemctl status vast-balance.service
+```
+
+再起動：
+
+```bash
+sudo systemctl restart vast-balance.service
+```
+
+ログをリアルタイム表示：
+
+```bash
+sudo journalctl -u vast-balance.service -f
+```
+
+直近100件のログ：
+
+```bash
+sudo journalctl -u vast-balance.service -n 100 -l --no-pager
+```
+
+## バックアップ・復元・アンインストール
+
+### バックアップ
+
+```bash
+sudo /opt/vast-revenue-monitor/install.sh --backup
+```
+
+### 復元
+
+```bash
+sudo /opt/vast-revenue-monitor/install.sh \
+  --restore \
+  /path/to/vast-revenue-monitor-backup-YYYYMMDD-HHMMSS.tar.gz
+```
+
+### アンインストール
+
+```bash
+sudo /opt/vast-revenue-monitor/uninstall.sh
+```
+
+バックアップには次の機密情報が含まれます。
+
+- Vast.ai APIキー
+- Discord Webhook URL
+- 収益履歴
+- 状態ファイル
+
+バックアップは安全な場所へ保管し、公開しないでください。必要に応じて別途暗号化してください。
+
+## トラブルシューティング
+
+### サービスが起動しない
+
+```bash
+sudo systemctl status vast-balance.service --no-pager
+sudo journalctl -u vast-balance.service -n 100 -l --no-pager
+```
+
+### アプリケーションログ
+
+```text
+/opt/vast-revenue-monitor/logs/vast-revenue-monitor.log
+```
+
+### 設定変更後に起動しない
+
+```bash
+sudo python3 -m json.tool \
+  /opt/vast-revenue-monitor/config.json
+
+sudo systemctl restart vast-balance.service
+```
+
+### 通知が届かない
+
+次を確認してください。
+
+- Discord Webhook URLが有効か
+- Vast.ai APIキーが有効か
+- サービスが `active` か
+- DNSとHTTPS接続が正常か
+- journalctlにエラーが出ていないか
+
+## セキュリティ
+
+- `config.json` を公開しないでください
+- Discord Webhook URLを公開しないでください
+- Vast.ai APIキーを公開しないでください
+- `api_response.json` を公開しないでください
+- バックアップファイルを公開しないでください
+
+漏洩が疑われる場合は、Discord WebhookとVast.ai APIキーの両方をローテーションしてください。
+
+サービスは専用ユーザーで動作します。
+
+## 免責事項
+
+本ソフトウェアは無保証で提供されます。
+
+表示される収益はVast.ai APIの観測値から算出した参考値です。必要に応じてVast.ai公式の値と照合してください。
+
+本ソフトウェアは会計、税務、投資、金融に関する助言を提供するものではありません。
+
+## ライセンス
+
+このプロジェクトはMIT Licenseで公開されています。
