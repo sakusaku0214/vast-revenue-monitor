@@ -1,6 +1,12 @@
 # Changelog
 
-## v1.1.0 (unpublished)
+## v1.1.1 (unpublished)
+
+- Define Today and Yesterday on JST 09:00 boundaries and calculate Today from the balance at that boundary rather than displaying the cumulative balance.
+- Define payout weeks as Saturday 09:00-to-Saturday 09:00 and payout months as four or five completed payout weeks plus the current running week.
+- Rename the record panel to ATH and restrict Daily, Weekly, and Monthly ATHs to completed periods; extend explicit state repair to rebuild invalid ATH data.
+
+## v1.1.0
 
 - Confirm delayed Vast.ai weekly resets with an observed balance drop.
 - Add 09:00 business-day Yesterday reporting and completed-period ATH semantics.

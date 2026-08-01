@@ -52,3 +52,36 @@ def test_ambiguous_repair_is_unchanged(tmp_path):
     count, backup = repair_state(config, state, apply=True)
     assert count == 0 and backup is None
     assert events_path.read_bytes() == before
+
+
+def test_repair_completed_period_ath_only_when_applied(tmp_path):
+    config, state = _write_fixture(tmp_path)
+    events_path = state / "revenue_events.json"
+    events = json.loads(events_path.read_text())
+    # Make the only retained day and week unambiguously completed.
+    events.append({
+        "timestamp": "2026-08-08T10:00:00+09:00", "balance": 3.0,
+        "increment": 3.0, "completed_weekly_balance": 5.13,
+        "weekly_boundary": "2026-08-08T09:00:00+09:00",
+    })
+    events_path.write_text(json.dumps(events), encoding="utf-8")
+    records_path = state / "records.json"
+    records_path.write_text(json.dumps({
+        "hourly": {"amount_usd": 9.0, "timestamp": "old"},
+        "daily": {"amount_usd": 999.0, "timestamp": "old"},
+        "weekly": {"amount_usd": 999.0, "timestamp": "old"},
+        "monthly": {"amount_usd": 999.0, "timestamp": "old"},
+    }), encoding="utf-8")
+    before = records_path.read_bytes()
+
+    count, backup = repair_state(config, state)
+    assert count >= 3 and backup is None
+    assert records_path.read_bytes() == before
+
+    count, backup = repair_state(config, state, apply=True)
+    repaired = json.loads(records_path.read_text())
+    assert count >= 3 and backup is not None
+    assert repaired["hourly"]["amount_usd"] == 9.0
+    assert repaired["daily"]["amount_usd"] != 999.0
+    assert repaired["weekly"]["amount_usd"] != 999.0
+    assert repaired["monthly"]["amount_usd"] != 999.0

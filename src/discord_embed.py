@@ -151,7 +151,8 @@ class DiscordNotifier:
             f"{self.t['hourly']}  **${snapshot.hourly_usd:,.2f}** / ¥{snapshot.hourly_usd * rate:,.0f}\n"
             f"{self.t['daily']}   **${snapshot.daily_usd:,.2f}** / ¥{snapshot.daily_usd * rate:,.0f}\n"
             f"{self.t['yesterday']}   **${snapshot.yesterday_usd:,.2f}** / ¥{snapshot.yesterday_usd * rate:,.0f}\n"
-            f"{self.t['weekly']}  **${snapshot.weekly_usd:,.2f}** / ¥{snapshot.weekly_usd * rate:,.0f}"
+            f"{self.t['weekly']}  **${snapshot.weekly_usd:,.2f}** / ¥{snapshot.weekly_usd * rate:,.0f}\n"
+            f"{self.t['monthly']}  **${snapshot.monthly_usd:,.2f}** / ¥{snapshot.monthly_usd * rate:,.0f}"
         )
         return [{"name": self.t["revenue"], "value": value, "inline": False}]
 
@@ -171,7 +172,7 @@ class DiscordNotifier:
         return {
             "name": self.t["all_time_high"],
             "value": "\n".join(
-                f"{self.t[period.value]}: ${highest.get(period, 0.0):,.2f}"
+                f"{self.t['ath_' + period.value]}: ${highest.get(period, 0.0):,.2f}"
                 for period in Period
             ),
             "inline": True,
