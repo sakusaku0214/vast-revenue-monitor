@@ -1,4 +1,4 @@
-# vast-revenue-monitor
+# vast.ai-revenue-monitor
 
 ![GitHub release](https://img.shields.io/github/v/release/sakusaku0214/vast-revenue-monitor)
 ![License](https://img.shields.io/github/license/sakusaku0214/vast-revenue-monitor)
