@@ -55,6 +55,7 @@ class AppConfig:
     @classmethod
     def load(cls, path: Path) -> "AppConfig":
         """Load configuration from a JSON file."""
+        path = path.expanduser().resolve()
         try:
             with path.open("r", encoding="utf-8") as handle:
                 raw = json.load(handle)
@@ -69,6 +70,10 @@ class AppConfig:
         if missing:
             joined = ", ".join(missing)
             raise ValueError(f"Missing required configuration keys: {joined}")
+        def configured_path(name: str, default: str) -> Path:
+            value = Path(str(raw.get(name, default))).expanduser()
+            return value if value.is_absolute() else (path.parent / value).resolve()
+
         config = cls(
             discord_webhook_url=str(raw["discord_webhook_url"]),
             vast=VastConfig(
@@ -89,8 +94,8 @@ class AppConfig:
                 timeout_seconds=int(raw.get("exchange_timeout_seconds", 15)),
             ),
             log_level=str(raw.get("log_level", "INFO")),
-            state_dir=Path(str(raw.get("state_dir", "state"))),
-            log_dir=Path(str(raw.get("log_dir", "logs"))),
+            state_dir=configured_path("state_dir", "state"),
+            log_dir=configured_path("log_dir", "logs"),
             request_timeout_seconds=int(raw.get("request_timeout_seconds", 30)),
             language=cls._language(raw.get("language", "en")),
         )

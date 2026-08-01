@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import shutil
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
@@ -12,6 +13,19 @@ from src.utils import read_json, write_json
 
 LOGGER = logging.getLogger(__name__)
 JST = ZoneInfo("Asia/Tokyo")
+
+
+def _hourly_ath(events: list[dict[str, object]]) -> tuple[float, object] | None:
+    """Return the largest evidenced positive interval and its event timestamp."""
+    candidates: list[tuple[float, object]] = []
+    for event in events:
+        try:
+            increment = float(event["increment"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(increment) and increment > 0 and event.get("timestamp"):
+            candidates.append((increment, event["timestamp"]))
+    return max(candidates, key=lambda candidate: candidate[0]) if candidates else None
 
 
 def _completed_ath(events: list[dict[str, object]]) -> dict[str, float]:
@@ -108,6 +122,20 @@ def repair_state(config_path: Path, state_dir: Path, apply: bool = False) -> tup
     records_path = state_dir / "records.json"
     records = read_json(records_path, dict) if records_path.exists() else {}
     expected = _completed_ath(repaired_events)
+    expected_timestamps: dict[str, object] = {}
+    hourly = None if ambiguous else _hourly_ath(repaired_events)
+    if ambiguous:
+        LOGGER.warning(
+            "Hourly ATH cannot be reconstructed while delayed-reset evidence is ambiguous; "
+            "stored value will remain unchanged"
+        )
+    elif hourly is None:
+        LOGGER.warning(
+            "Hourly ATH cannot be reconstructed: no valid positive increment evidence; "
+            "stored value will remain unchanged"
+        )
+    else:
+        expected["hourly"], expected_timestamps["hourly"] = hourly
     invalid_ath = [
         period for period, amount in expected.items()
         if period in records
@@ -135,7 +163,10 @@ def repair_state(config_path: Path, state_dir: Path, apply: bool = False) -> tup
     if invalid_ath:
         stamp_value = events[-1]["timestamp"]
         for period in invalid_ath:
-            records[period] = {"amount_usd": expected[period], "timestamp": stamp_value}
+            records[period] = {
+                "amount_usd": expected[period],
+                "timestamp": expected_timestamps.get(period, stamp_value),
+            }
         write_json(records_path, records)
     # Reset history only when event increments changed; ATH repair alone does
     # not invalidate the displayed historical snapshots.

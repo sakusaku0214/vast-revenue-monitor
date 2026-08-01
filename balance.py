@@ -58,6 +58,8 @@ def main() -> int:
     args = parse_args()
     if args.apply and not args.repair_state:
         raise ValueError("--apply is only valid with --repair-state")
+    # Keep every config-relative operation independent of the caller's cwd.
+    args.config = args.config.expanduser().resolve()
     config = AppConfig.load(args.config)
     ensure_directory(config.state_dir)
     ensure_directory(config.log_dir)
