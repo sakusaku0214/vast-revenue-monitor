@@ -3,13 +3,8 @@
 ![GitHub release](https://img.shields.io/github/v/release/sakusaku0214/vast-revenue-monitor)
 ![License](https://img.shields.io/github/license/sakusaku0214/vast-revenue-monitor)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-<p>
-  <img
-    src="https://github.com/user-attachments/assets/098a47d2-8ad1-4c83-81de-55ef7a8cfc94"
-    alt="Vast Revenue Monitor Discord notification"
-    width="400"
-  >
-</p>
+<img width="470" height="451" alt="image" src="https://github.com/user-attachments/assets/40390a29-eff8-4688-bdca-2a5dfefbce9e" />
+
 
 <p>
   <strong>A production-ready revenue monitor for Vast.ai hosts with automatic Discord notifications.</strong>
