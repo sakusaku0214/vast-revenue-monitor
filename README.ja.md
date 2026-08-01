@@ -1,18 +1,16 @@
-# vast-revenue-monitor
+# vastai-revenue-monitor
 
-<p align="center">
-  <img
-    src="https://github.com/user-attachments/assets/098a47d2-8ad1-4c83-81de-55ef7a8cfc94"
-    alt="Vast Revenue Monitor Discord notification"
-    width="400"
-  >
-</p>
+![GitHub release](https://img.shields.io/github/v/release/sakusaku0214/vast-revenue-monitor)
+![License](https://img.shields.io/github/license/sakusaku0214/vast-revenue-monitor)
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 
-<p align="center">
+<img width="470" height="451" alt="image" src="https://github.com/user-attachments/assets/d5eed3b5-40de-4194-a627-a2b32794b018" />
+
+<p>
   <strong>Vast.aiホストの収益を監視し、Discordへ自動通知する運用向けツール</strong>
 </p>
 
-<p align="center">
+<p>
   <a href="README.md">English</a> | 日本語
 </p>
 
