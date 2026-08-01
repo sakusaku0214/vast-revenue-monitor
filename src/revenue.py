@@ -23,12 +23,17 @@ class RevenueAccumulator:
             raise ValueError("Revenue events state must be a JSON array")
         local = sample.timestamp.astimezone(self._timezone)
         day_start = self._period_start(local, local.date(), time(9))
-        week_start = day_start - timedelta(days=(day_start.weekday() - 5) % 7)
         previous = float(events[-1]["balance"]) if events else sample.amount_usd
-        crossed_reset = self._crossed_weekly_reset(events, sample, week_start)
+        boundary = self._weekly_boundary(local)
+        confirmed_reset = self._confirm_weekly_reset(
+            events, sample, boundary, previous
+        )
+        # A reset sample's remaining balance belongs to the new week.  Its exact
+        # earning time is unknowable, so (as before) it is attributed to the
+        # confirming observation rather than extrapolated across an interval.
         increment = (
             sample.amount_usd
-            if crossed_reset
+            if confirmed_reset
             else max(sample.amount_usd - previous, 0.0)
         )
         event: dict[str, object] = {
@@ -36,19 +41,39 @@ class RevenueAccumulator:
             "balance": sample.amount_usd,
             "increment": increment,
         }
-        if crossed_reset:
+        if events:
+            prior_time = datetime.fromisoformat(str(events[-1]["timestamp"]))
+            if prior_time < boundary <= sample.timestamp and not confirmed_reset:
+                event["pending_weekly_boundary"] = boundary.isoformat()
+        if confirmed_reset:
             event["completed_weekly_balance"] = previous
+            event["weekly_boundary"] = boundary.isoformat()
         events.append(event)
         events = events[-10000:]
         write_json(self._path, events)
-        month_start = datetime.combine(
-            local.date().replace(day=1), time(9), tzinfo=self._timezone
+        previous_timestamp = (
+            datetime.fromisoformat(str(events[-2]["timestamp"])) if len(events) > 1 else None
         )
-        if local < month_start:
-            previous_month = local.date().replace(day=1) - timedelta(days=1)
-            month_start = datetime.combine(
-                previous_month.replace(day=1), time(9), tzinfo=self._timezone
+        yesterday_start = day_start - timedelta(days=1)
+        completed_daily: tuple[float, ...] = ()
+        completed_monthly: tuple[float, ...] = ()
+        if previous_timestamp is not None:
+            previous_local = previous_timestamp.astimezone(self._timezone)
+            previous_day_start = self._period_start(
+                previous_local, previous_local.date(), time(9)
             )
+            if previous_day_start < day_start:
+                completed_daily = (
+                    self._sum_range(
+                        events, day_start - timedelta(days=1), day_start
+                    ),
+                )
+            if (previous_local.year, previous_local.month) != (local.year, local.month):
+                completed_monthly = (
+                    self._monthly_total(
+                        events, previous_local.year, previous_local.month
+                    ),
+                )
         return RevenueSnapshot(
             timestamp=sample.timestamp,
             # "Hourly" is the newest successful observation, not a rolling
@@ -57,19 +82,37 @@ class RevenueAccumulator:
             hourly_usd=increment,
             daily_usd=self._sum_since(events, day_start),
             weekly_usd=sample.amount_usd,
-            monthly_usd=self._sum_since(events, month_start),
+            monthly_usd=self._monthly_total(events, local.year, local.month),
+            yesterday_usd=self._sum_range(events, yesterday_start, day_start),
+            completed_daily_usd=completed_daily,
+            completed_weekly_usd=(previous,) if confirmed_reset else (),
+            completed_monthly_usd=completed_monthly,
         )
 
     @staticmethod
-    def _crossed_weekly_reset(
+    def _confirm_weekly_reset(
         events: list[dict[str, object]],
         sample: AccountBalance,
-        week_start: datetime,
+        boundary: datetime,
+        previous_balance: float,
     ) -> bool:
         if not events:
             return False
-        previous_timestamp = datetime.fromisoformat(str(events[-1]["timestamp"]))
-        return previous_timestamp < week_start <= sample.timestamp
+        if sample.amount_usd >= previous_balance or sample.timestamp < boundary:
+            return False
+        boundary_key = boundary.isoformat()
+        already_confirmed = any(
+            event.get("weekly_boundary") == boundary_key for event in events
+        )
+        boundary_observed = (
+            datetime.fromisoformat(str(events[-1]["timestamp"])) < boundary
+            or any(event.get("pending_weekly_boundary") == boundary_key for event in events)
+        )
+        return boundary_observed and not already_confirmed
+
+    def _weekly_boundary(self, local: datetime) -> datetime:
+        day_start = self._period_start(local, local.date(), time(9))
+        return day_start - timedelta(days=(day_start.weekday() - 5) % 7)
 
     def _period_start(self, now: datetime, period_date: date, boundary: time) -> datetime:
         start = datetime.combine(period_date, boundary, tzinfo=self._timezone)
@@ -82,3 +125,27 @@ class RevenueAccumulator:
             for event in events
             if datetime.fromisoformat(str(event["timestamp"])) >= start
         )
+
+    @staticmethod
+    def _sum_range(
+        events: list[dict[str, object]], start: datetime, end: datetime
+    ) -> float:
+        return sum(
+            float(event["increment"])
+            for event in events
+            if start <= datetime.fromisoformat(str(event["timestamp"])) < end
+        )
+
+    def _monthly_total(
+        self, events: list[dict[str, object]], year: int, month: int
+    ) -> float:
+        total = 0.0
+        for event in events:
+            if "completed_weekly_balance" not in event:
+                continue
+            closed = datetime.fromisoformat(str(event["timestamp"])).astimezone(
+                self._timezone
+            )
+            if (closed.year, closed.month) == (year, month):
+                total += float(event["completed_weekly_balance"])
+        return total

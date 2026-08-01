@@ -150,6 +150,7 @@ class DiscordNotifier:
         value = (
             f"{self.t['hourly']}  **${snapshot.hourly_usd:,.2f}** / ¥{snapshot.hourly_usd * rate:,.0f}\n"
             f"{self.t['daily']}   **${snapshot.daily_usd:,.2f}** / ¥{snapshot.daily_usd * rate:,.0f}\n"
+            f"{self.t['yesterday']}   **${snapshot.yesterday_usd:,.2f}** / ¥{snapshot.yesterday_usd * rate:,.0f}\n"
             f"{self.t['weekly']}  **${snapshot.weekly_usd:,.2f}** / ¥{snapshot.weekly_usd * rate:,.0f}"
         )
         return [{"name": self.t["revenue"], "value": value, "inline": False}]
@@ -202,6 +203,7 @@ class DiscordNotifier:
         return [
             self._period_field(self.t["hourly"], snapshot.hourly_usd, usdjpy, changes["hourly"]),
             self._period_field(self.t["daily"], snapshot.daily_usd, usdjpy, changes["daily"]),
+            self._period_field(self.t["yesterday"], snapshot.yesterday_usd, usdjpy, Change(0, 0)),
             self._period_field(self.t["weekly"], snapshot.weekly_usd, usdjpy, changes["weekly"]),
             self._period_field(self.t["monthly"], snapshot.monthly_usd, usdjpy, changes["monthly"]),
         ]

@@ -30,7 +30,8 @@ def test_samples_59_59_apart_are_not_summed_and_periods_still_aggregate(tmp_path
     assert one.hourly_usd == pytest.approx(3.56739328)
     assert two.hourly_usd == pytest.approx(5.35864710)
     assert two.daily_usd == pytest.approx(8.92604038)
-    assert two.monthly_usd == pytest.approx(8.92604038)
+    # Monthly contains completed weekly closures, not in-progress deltas.
+    assert two.monthly_usd == 0
     assert two.weekly_usd == pytest.approx(28.92604038)
 
 

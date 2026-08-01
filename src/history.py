@@ -8,7 +8,7 @@ from pathlib import Path
 from src.models import Change, Period, RevenueSnapshot
 from src.utils import ensure_directory, read_json, utc_iso, write_json
 
-CSV_HEADER = ["timestamp", "hourly", "daily", "weekly", "monthly"]
+CSV_HEADER = ["timestamp", "hourly", "daily", "yesterday", "weekly", "monthly"]
 
 
 class HistoryStore:
@@ -56,6 +56,7 @@ class HistoryStore:
             "timestamp": utc_iso(snapshot.timestamp),
             "hourly": snapshot.hourly_usd,
             "daily": snapshot.daily_usd,
+            "yesterday": snapshot.yesterday_usd,
             "weekly": snapshot.weekly_usd,
             "monthly": snapshot.monthly_usd,
         }

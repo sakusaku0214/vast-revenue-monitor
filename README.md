@@ -9,7 +9,7 @@
 
 English | [日本語](README.ja.md)
 
-**Current Stable Release: v1.0.1**
+**Current Stable Release: v1.1.0**
 
 **Automatically monitor your Vast.ai revenue and send professional Discord notifications via Webhooks.**
 
@@ -432,5 +432,44 @@ Configuration is `/opt/vast-revenue-monitor/config.json`; runtime data is under 
 💰 VAST.AI HOURLY REPORT
 Revenue — Hourly $5.36 · Daily $20.00 · Weekly $95.00
 Weekly Goal — Current $95.00 · Goal $100.00 · Remaining to Goal $5.00
-Vast Revenue Monitor v1.0.1
+Vast Revenue Monitor v1.1.0
+```
+
+## Revenue boundaries and completed-period records
+
+All boundaries use the configured timezone (`Asia/Tokyo` by default):
+
+* **Today** is the active business day, from 09:00 through 08:59:59 the following day. **Yesterday** is the immediately preceding, completed 09:00-to-09:00 business day and remains fixed throughout Today.
+* **Week** begins at Saturday 09:00. Because Vast.ai can publish its payout reset late, the week closes only when an observation after the nominal boundary shows a real balance decrease. Crossing 09:00 with an unchanged or rising balance is an ordinary positive delta. At a confirmed drop, the previous balance is archived and the remaining balance initializes the new week.
+* **Month** is the sum of completed weekly balances whose actual reset-confirmation timestamp falls in that local calendar month. The in-progress week is excluded.
+
+The latest-interval (Hourly) value is the positive difference at the newest observation and may set an ATH immediately. Daily, Weekly, and Monthly ATHs and notifications use only completed business days, confirmed completed weeks, and completed calendar months respectively. Earnings whose exact time within a sampling interval is unknowable are attributed to the observation at the end of that interval; the monitor never extrapolates or normalizes them. A post-reset remainder is likewise attributed to the reset-confirming observation so it is not lost.
+
+### Repairing delayed-reset corruption
+
+Repair is explicit and dry-run by default. It takes the normal application lock, reports each evidence-backed correction, and leaves ambiguous candidates unchanged:
+
+```bash
+sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py \
+  --config /opt/vast-revenue-monitor/config.json --repair-state
+sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py \
+  --config /opt/vast-revenue-monitor/config.json --repair-state --apply
+```
+
+Apply creates a timestamped `repair-backup-*` directory beside the state directory containing `config.json` and the complete state tree before atomic writes. This backup contains API credentials, the Discord webhook, and revenue history: protect it like the live configuration. To roll back, stop the service, move the current config/state aside, copy the backed-up `config.json` and `state/` into their original locations while preserving ownership, then restart the service.
+
+## Safe upgrades
+
+The recommended production upgrade updates the checkout with fast-forward-only Git operations and then invokes the transactional installer:
+
+```bash
+cd ~/vast-revenue-monitor
+sudo ./update.sh
+```
+
+Use `sudo ./update.sh --check` for a no-change preview. The updater refuses dirty tracked files by default, serializes concurrent runs, fetches with pruning, shows old/new commits, and never rebases, force-resets, deletes user files, branches, or tags. Plain `git pull` does **not** update the root-owned `/opt` installation. Manual fallback:
+
+```bash
+git pull --ff-only origin main
+sudo bash install.sh
 ```

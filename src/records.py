@@ -17,21 +17,29 @@ class RecordsStore:
         """Persist new records and return detailed record-break information."""
         records = read_json(self._path, lambda: {})
         broken: dict[Period, RecordBreak] = {}
+        candidates = {
+            Period.HOURLY: (snapshot.hourly_usd,),
+            Period.DAILY: snapshot.completed_daily_usd,
+            Period.WEEKLY: snapshot.completed_weekly_usd,
+            Period.MONTHLY: snapshot.completed_monthly_usd,
+        }
         for period in Period:
-            current = snapshot.value_for(period)
-            previous = float(records.get(period.value, {}).get("amount_usd", 0.0))
-            if current > previous:
-                improvement = ((current - previous) / previous * 100.0) if previous else 0.0
-                records[period.value] = {
-                    "amount_usd": current,
-                    "timestamp": utc_iso(snapshot.timestamp),
-                }
-                broken[period] = RecordBreak(
-                    period=period,
-                    previous_best_usd=previous,
-                    current_usd=current,
-                    improvement_percent=improvement,
-                )
+            for current in candidates[period]:
+                previous = float(records.get(period.value, {}).get("amount_usd", 0.0))
+                if current > previous:
+                    improvement = (
+                        ((current - previous) / previous * 100.0) if previous else 0.0
+                    )
+                    records[period.value] = {
+                        "amount_usd": current,
+                        "timestamp": utc_iso(snapshot.timestamp),
+                    }
+                    broken[period] = RecordBreak(
+                        period=period,
+                        previous_best_usd=previous,
+                        current_usd=current,
+                        improvement_percent=improvement,
+                    )
         write_json(self._path, records)
         return broken
 
