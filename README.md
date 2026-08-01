@@ -9,6 +9,10 @@
 
 English | [日本語](README.ja.md)
 
+![GitHub release](https://img.shields.io/github/v/release/sakusaku0214/vast-revenue-monitor)
+![License](https://img.shields.io/github/license/sakusaku0214/vast-revenue-monitor)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+
 **Current Stable Release: v1.1.2**
 
 **Automatically monitor your Vast.ai revenue and send professional Discord notifications via Webhooks.**
