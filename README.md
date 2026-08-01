@@ -3,6 +3,7 @@
 ![GitHub release](https://img.shields.io/github/v/release/sakusaku0214/vast-revenue-monitor)
 ![License](https://img.shields.io/github/license/sakusaku0214/vast-revenue-monitor)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
+<br>
 <img width="470" height="451" alt="image" src="https://github.com/user-attachments/assets/40390a29-eff8-4688-bdca-2a5dfefbce9e" />
 
 
