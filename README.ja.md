@@ -3,8 +3,8 @@
 ![GitHub release](https://img.shields.io/github/v/release/sakusaku0214/vast-revenue-monitor)
 ![License](https://img.shields.io/github/license/sakusaku0214/vast-revenue-monitor)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-
-<img width="470" height="451" alt="image" src="https://github.com/user-attachments/assets/d5eed3b5-40de-4194-a627-a2b32794b018" />
+<br>
+<img width="405" height="432" alt="image" src="https://github.com/user-attachments/assets/a12d0005-ef93-43ee-8265-c3f85a74a4a6" />
 
 <p>
   <strong>Vast.aiホストの収益を監視し、Discordへ自動通知する運用向けツール</strong>
