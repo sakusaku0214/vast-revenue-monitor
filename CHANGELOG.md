@@ -1,6 +1,11 @@
 # Changelog
 
-## v1.1.1 (unpublished)
+## v1.1.2 (unpublished)
+
+- Resolve relative state and log directories from the configuration file location, independent of the caller's working directory.
+- Rebuild Hourly ATH from corrected positive interval increments during explicit state repair.
+
+## v1.1.1
 
 - Define Today and Yesterday on JST 09:00 boundaries and calculate Today from the balance at that boundary rather than displaying the cumulative balance.
 - Define payout weeks as Saturday 09:00-to-Saturday 09:00 and payout months as four or five completed payout weeks plus the current running week.

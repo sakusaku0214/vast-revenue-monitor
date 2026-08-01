@@ -9,7 +9,7 @@
 
 English | [日本語](README.ja.md)
 
-**Current Stable Release: v1.1.1**
+**Current Stable Release: v1.1.2**
 
 **Automatically monitor your Vast.ai revenue and send professional Discord notifications via Webhooks.**
 
@@ -197,6 +197,9 @@ Copy `config.example.json` to `config.json` for local development. Configure:
 - `detailed_report`: `false` sends the compact hourly report; `true` adds changes
   and daily-goal pace details.
 - `timezone`: IANA timezone, default `Asia/Tokyo`.
+- `state_dir` and `log_dir`: persistent state and log directories. Relative
+  paths are resolved from the directory containing `config.json`, never from
+  the process working directory; absolute paths are used unchanged.
 - `exchange_api_urls`: ordered USDJPY provider URLs; each must return `rates.JPY` or `conversion_rates.JPY`.
 - `log_level`: `DEBUG`, `INFO`, `WARNING`, or `ERROR`.
 
@@ -427,7 +430,7 @@ Configuration is `/opt/vast-revenue-monitor/config.json`; runtime data is under 
 💰 VAST.AI HOURLY REPORT
 Revenue — Latest interval $5.36 · Today $20.00 · Yesterday $18.00 · This week $95.00 · This month $380.00
 Weekly Goal — Current $95.00 · Goal $100.00 · Remaining to Goal $5.00
-Vast Revenue Monitor v1.1.1
+Vast Revenue Monitor v1.1.2
 ```
 
 ## Revenue boundaries and completed-period ATH
@@ -443,7 +446,7 @@ The **ATH** panel is labeled Hourly, Daily, Weekly, and Monthly. Hourly ATH is t
 
 ### Explicit state repair
 
-The repair command is dry-run by default and detects delayed-reset corruption plus invalid Daily, Weekly, and Monthly ATH records reconstructable from retained snapshots. It never changes data unless `--apply` is explicitly supplied:
+The repair command is dry-run by default and detects delayed-reset corruption plus invalid Hourly, Daily, Weekly, and Monthly ATH records reconstructable from retained events. Hourly is rebuilt only from valid positive corrected `increment` values, never account balances. It never changes data unless `--apply` is explicitly supplied:
 
 ```bash
 python3 balance.py --config /opt/vast-revenue-monitor/config.json --repair-state

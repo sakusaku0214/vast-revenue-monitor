@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+import balance
 from src.repair import repair_state
 
 
@@ -81,7 +82,81 @@ def test_repair_completed_period_ath_only_when_applied(tmp_path):
     count, backup = repair_state(config, state, apply=True)
     repaired = json.loads(records_path.read_text())
     assert count >= 3 and backup is not None
-    assert repaired["hourly"]["amount_usd"] == 9.0
+    assert (backup / "state" / "records.json").read_bytes() == before
+    assert repaired["hourly"]["amount_usd"] == pytest.approx(5.19)
+    assert repaired["hourly"]["timestamp"] == events[0]["timestamp"]
     assert repaired["daily"]["amount_usd"] != 999.0
     assert repaired["weekly"]["amount_usd"] != 999.0
     assert repaired["monthly"]["amount_usd"] != 999.0
+
+
+def test_hourly_uses_corrected_increments_never_balances(tmp_path, caplog):
+    caplog.set_level("INFO", logger="src.repair")
+    config, state = _write_fixture(tmp_path)
+    events_path = state / "revenue_events.json"
+    events = json.loads(events_path.read_text())
+    events.insert(1, {
+        "timestamp": "2026-08-01T08:30:00+09:00", "balance": 911.51,
+        "increment": 11.61,
+    })
+    events_path.write_text(json.dumps(events), encoding="utf-8")
+    records_path = state / "records.json"
+    records_path.write_text(json.dumps({
+        "hourly": {"amount_usd": 914.96, "timestamp": "bad"},
+    }), encoding="utf-8")
+    before = records_path.read_bytes()
+
+    count, backup = repair_state(config, state)
+
+    assert count == 2 and backup is None
+    assert records_path.read_bytes() == before
+    assert "invalid hourly ATH 914.96 becomes 11.61" in caplog.text
+
+    repair_state(config, state, apply=True)
+    repaired = json.loads(records_path.read_text())
+    assert repaired["hourly"] == {
+        "amount_usd": 11.61,
+        "timestamp": "2026-08-01T08:30:00+09:00",
+    }
+    assert repaired["hourly"]["amount_usd"] != max(event["balance"] for event in events)
+
+
+def test_hourly_without_positive_evidence_is_preserved(tmp_path, caplog):
+    config, state = _write_fixture(tmp_path)
+    (state / "revenue_events.json").write_text(json.dumps([
+        {"timestamp": "2026-08-01T08:00:00+09:00", "balance": 10, "increment": 0},
+        {"timestamp": "2026-08-01T09:00:00+09:00", "balance": 9, "increment": -1},
+    ]), encoding="utf-8")
+    records_path = state / "records.json"
+    records_path.write_text(json.dumps({
+        "hourly": {"amount_usd": 7.0, "timestamp": "preserved"},
+    }), encoding="utf-8")
+
+    count, backup = repair_state(config, state, apply=True)
+
+    assert count == 0 and backup is None
+    assert json.loads(records_path.read_text())["hourly"]["amount_usd"] == 7.0
+    assert "cannot be reconstructed" in caplog.text
+
+
+def test_cli_repair_finds_config_relative_state_from_unrelated_cwd(
+    tmp_path, monkeypatch, caplog
+):
+    install = tmp_path / "opt" / "vast-revenue-monitor"
+    install.mkdir(parents=True)
+    config, fixture_state = _write_fixture(tmp_path)
+    config.replace(install / "config.json")
+    fixture_state.replace(install / "state")
+    (install / "logs").mkdir()
+    (install / "config.json").write_text(json.dumps({
+        "discord_webhook_url": "https://discord.com/api/webhooks/id/token",
+        "vast_api_key": "secret", "state_dir": "state", "log_dir": "logs",
+    }), encoding="utf-8")
+    unrelated = tmp_path / "home" / "sakusaku"
+    unrelated.mkdir(parents=True)
+    monkeypatch.chdir(unrelated)
+    monkeypatch.setattr("sys.argv", ["balance.py", "--config", str(install / "config.json"), "--repair-state"])
+
+    assert balance.main() == 0
+    assert (install / "state" / "monitor.lock").exists()
+    assert not (unrelated / "state").exists()

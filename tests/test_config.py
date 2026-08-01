@@ -55,3 +55,32 @@ def test_config_accepts_valid_minimal_file(tmp_path):
     assert config.vast.revenue_endpoint == "/users/current/"
     assert config.vast.auth_mode == "query"
     assert config.vast.balance_field == "balance"
+    assert config.state_dir == tmp_path / "state"
+    assert config.log_dir == tmp_path / "logs"
+
+
+def test_relative_directories_are_based_on_config_not_cwd(tmp_path, monkeypatch):
+    install = tmp_path / "opt" / "vast-revenue-monitor"
+    install.mkdir(parents=True)
+    path = install / "config.json"
+    _write_config(path, state_dir="var/state", log_dir="var/log")
+    unrelated = tmp_path / "home" / "caller"
+    unrelated.mkdir(parents=True)
+    monkeypatch.chdir(unrelated)
+
+    config = AppConfig.load(path)
+
+    assert config.state_dir == install / "var" / "state"
+    assert config.log_dir == install / "var" / "log"
+
+
+def test_absolute_directories_remain_unchanged(tmp_path):
+    path = tmp_path / "config.json"
+    state = tmp_path / "absolute-state"
+    logs = tmp_path / "absolute-logs"
+    _write_config(path, state_dir=str(state), log_dir=str(logs))
+
+    config = AppConfig.load(path)
+
+    assert config.state_dir == state
+    assert config.log_dir == logs
