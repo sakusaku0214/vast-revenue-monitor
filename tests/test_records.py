@@ -8,8 +8,14 @@ from src.records import RecordsStore
 
 def test_records_store_returns_detailed_record_breaks(tmp_path):
     store = RecordsStore(tmp_path / "records.json")
-    first = RevenueSnapshot(datetime(2026, 7, 24, tzinfo=timezone.utc), 1, 10, 20, 30)
-    second = RevenueSnapshot(datetime(2026, 7, 25, tzinfo=timezone.utc), 1, 15, 18, 60)
+    first = RevenueSnapshot(
+        datetime(2026, 7, 24, tzinfo=timezone.utc), 1, 10, 20, 30,
+        completed_daily_usd=(10,), completed_monthly_usd=(30,),
+    )
+    second = RevenueSnapshot(
+        datetime(2026, 7, 25, tzinfo=timezone.utc), 1, 15, 18, 60,
+        completed_daily_usd=(15,), completed_monthly_usd=(60,),
+    )
 
     store.update(first)
     broken = store.update(second)

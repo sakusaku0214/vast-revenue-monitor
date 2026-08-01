@@ -4,7 +4,7 @@
 
 [English](README.md) | 日本語
 
-**現在の安定版: v1.0.1**
+**現在の安定版: v1.1.0**
 
 ## 概要
 
@@ -194,7 +194,7 @@ Vast.ai の current-user エンドポイントは週間の `balance` を提供�
 💰 VAST.AI 毎時収益レポート
 収益 — 直近区間 $5.36 · 本日 $20.00 · 今週 $95.00
 週間目標 — 現在 $95.00 · 目標 $100.00 · 目標まで残り $5.00
-Vast Revenue Monitor v1.0.1
+Vast Revenue Monitor v1.1.0
 ```
 
 ## 保存されるデータ
@@ -243,4 +243,43 @@ sudo journalctl -u vast-balance.service -n 100 -l
 ## 免責事項
 
 無保証で提供されます。Vast.ai の公式値と照合してください。会計、税務、投資・金融助言ではありません。
+```
+
+## 収益期間と確定期間の最高記録
+
+すべての境界は設定タイムゾーン（既定値 `Asia/Tokyo`）を使用します。
+
+* **本日**は 09:00 から翌日 08:59:59 までの進行中の営業日です。**昨日**はその直前に完了した 09:00〜09:00 の営業日で、本日の間は変化しません。
+* **今週**は土曜 09:00 に始まります。ただし Vast.ai の支払リセットが遅れることがあるため、名目境界後に実際の残高減少を観測した時点でのみ週を確定します。09:00 を越えて残高が同額または増加している場合は通常の正の差分です。減少を確認すると直前の残高を完了週として保存し、残った残高で新しい週を開始します。
+* **今月**は、実際のリセット確認時刻がそのローカル暦月に含まれる完了週の合計です。進行中の週は含みません。
+
+直近区間（Hourly）は最新観測の正の差分で、直ちに最高記録を更新できます。日間・週間・月間 ATH と通知は、それぞれ完了営業日、残高減少で確定した完了週、完了暦月だけを使用します。サンプリング区間内の正確な獲得時刻が不明な収益は区間末の観測に帰属させ、補間・正規化しません。リセット後に残った残高も失わないよう確認観測に帰属させます。
+
+### 遅延リセット破損の修復
+
+修復は明示的に実行し、既定ではドライランです。通常処理と同じロックを取得し、根拠のある修正をすべて説明し、不明確な候補は変更しません。
+
+```bash
+sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py \
+  --config /opt/vast-revenue-monitor/config.json --repair-state
+sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py \
+  --config /opt/vast-revenue-monitor/config.json --repair-state --apply
+```
+
+適用時は状態ディレクトリの隣に日時付き `repair-backup-*` を作成し、`config.json` と状態ツリー全体を保存してから原子的に書き込みます。バックアップには API キー、Discord Webhook、収益履歴が含まれるため、実運用設定と同様に保護してください。ロールバックはサービスを停止し、現在の設定・状態を退避して、バックアップの `config.json` と `state/` を所有者を維持して元の場所へ戻し、サービスを再起動します。
+
+## 安全なアップグレード
+
+推奨コマンドは Git チェックアウトを fast-forward のみで更新し、トランザクション対応インストーラーを実行します。
+
+```bash
+cd ~/vast-revenue-monitor
+sudo ./update.sh
+```
+
+変更しない確認には `sudo ./update.sh --check` を使用します。更新処理は追跡ファイルの未コミット変更を既定で拒否し、同時実行を防ぎ、prune 付き fetch と旧・新コミット表示を行います。rebase、force-reset、ユーザーファイル・ブランチ・タグの削除は行いません。通常の `git pull` だけでは root 所有の `/opt` は更新されません。手動手順は次のとおりです。
+
+```bash
+git pull --ff-only origin main
+sudo bash install.sh
 ```

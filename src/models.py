@@ -60,12 +60,23 @@ class RevenueSnapshot:
     weekly_usd: float
     monthly_usd: float
     gpu_availability: GpuAvailability | None = None
+    yesterday_usd: float = 0.0
+    # Values which became final at this observation.  These are deliberately
+    # separate from display values so unfinished periods cannot set records.
+    completed_daily_usd: tuple[float, ...] = ()
+    completed_weekly_usd: tuple[float, ...] = ()
+    completed_monthly_usd: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         """Prevent corrupt or nonsensical API values entering persistent state."""
         if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
             raise ValueError("Revenue timestamp must be timezone-aware")
-        values = (self.hourly_usd, self.daily_usd, self.weekly_usd, self.monthly_usd)
+        values = (
+            self.hourly_usd, self.daily_usd, self.weekly_usd,
+            self.monthly_usd, self.yesterday_usd,
+            *self.completed_daily_usd, *self.completed_weekly_usd,
+            *self.completed_monthly_usd,
+        )
         if any(not math.isfinite(value) or value < 0 for value in values):
             raise ValueError("Revenue values must be finite and non-negative")
 

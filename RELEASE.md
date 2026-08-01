@@ -1,3 +1,3 @@
-# Vast Revenue Monitor v1.0.1
+# Vast Revenue Monitor v1.1.0
 
-This hotfix prevents fresh installations from referencing `NOTIFICATION_LANGUAGE` before it is assigned. Interactive first installs now select English or Japanese after the Weekly Goal and Detailed Report questions, defaulting to English on Enter. Unattended installs accept `en` or `ja` and safely default to English when the variable is unset. Upgrades continue preserving existing configuration without a language prompt.
+This accounting release confirms delayed weekly resets only on a real balance drop, adds Yesterday, assigns monthly revenue from completed weekly closings, restricts ATHs to completed periods (except Hourly), provides an explicit backed-up repair workflow, and adds the safe `sudo ./update.sh` production updater. Existing event arrays remain readable; new metadata is additive, while repair is never run automatically.

@@ -1,6 +1,13 @@
 # Changelog
 
-## v1.0.1 (unpublished)
+## v1.1.0 (unpublished)
+
+- Confirm delayed Vast.ai weekly resets with an observed balance drop.
+- Add 09:00 business-day Yesterday reporting and completed-period ATH semantics.
+- Derive months from completed weekly closings.
+- Add dry-run/apply state repair with backups and a safe one-command updater.
+
+## v1.0.1
 
 - Fixed fresh installation failure when `NOTIFICATION_LANGUAGE` was referenced before assignment.
 - Added first-install English/Japanese selection with a safe English unattended default.

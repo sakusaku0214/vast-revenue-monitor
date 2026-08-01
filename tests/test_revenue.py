@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from src.models import AccountBalance
 from src.revenue import RevenueAccumulator
 from src.utils import read_json
@@ -53,3 +55,22 @@ def test_weekly_reset_archives_previous_week_and_counts_post_reset_balance(tmp_p
     assert next_sample.weekly_usd == 2.0
     assert events[-2]["completed_weekly_balance"] == 150.0
     assert events[-1]["balance"] == 2.0
+
+
+def test_delayed_weekly_reset_requires_balance_drop(tmp_path):
+    path = tmp_path / "events.json"
+    accumulator = RevenueAccumulator(path, ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    before = datetime(2026, 8, 1, 8, 0, tzinfo=jst)
+
+    accumulator.update(AccountBalance(before, 909.90))
+    pending = accumulator.update(AccountBalance(before + timedelta(hours=1), 914.96))
+    reset = accumulator.update(AccountBalance(before + timedelta(hours=2), 5.13))
+    events = read_json(path, list)
+
+    assert pending.hourly_usd == pytest.approx(5.06)
+    assert "completed_weekly_balance" not in events[1]
+    assert reset.hourly_usd == pytest.approx(5.13)
+    assert reset.completed_weekly_usd == (914.96,)
+    assert reset.weekly_usd == 5.13
+    assert reset.monthly_usd == 914.96

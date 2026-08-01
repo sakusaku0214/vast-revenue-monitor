@@ -37,6 +37,7 @@ def read_json(path: Path, default_factory: Callable[[], T]) -> T:
 def write_json(path: Path, data: Any) -> None:
     """Atomically write JSON to disk."""
     ensure_directory(path.parent)
+    existing = path.stat() if path.exists() else None
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", dir=path.parent, delete=False
     ) as handle:
@@ -47,7 +48,9 @@ def write_json(path: Path, data: Any) -> None:
         temp_name = handle.name
     temp_path = Path(temp_name)
     try:
-        temp_path.chmod(0o600)
+        temp_path.chmod(existing.st_mode & 0o7777 if existing else 0o600)
+        if existing:
+            os.chown(temp_path, existing.st_uid, existing.st_gid)
         temp_path.replace(path)
         directory_fd = os.open(path.parent, os.O_RDONLY)
         try:

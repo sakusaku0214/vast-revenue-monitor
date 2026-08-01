@@ -4,7 +4,7 @@ from __future__ import annotations
 CATALOG = {
     "en": {
         "title": "💰 VAST.AI HOURLY REPORT", "revenue": "Revenue",
-        "hourly": "Hourly", "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly",
+        "hourly": "Hourly", "daily": "Today", "yesterday": "Yesterday", "weekly": "Weekly", "monthly": "Monthly",
         "weekly_goal": "Weekly Goal", "current": "Current", "goal": "Goal",
         "progress": "Progress", "remaining_goal": "Remaining to Goal",
         "all_time_high": "All Time High", "previous": "Previous", "improvement": "Improvement",
@@ -19,7 +19,7 @@ CATALOG = {
     },
     "ja": {
         "title": "💰 VAST.AI 毎時収益レポート", "revenue": "収益",
-        "hourly": "直近区間", "daily": "本日", "weekly": "今週", "monthly": "今月",
+        "hourly": "直近区間", "daily": "本日", "yesterday": "昨日", "weekly": "今週", "monthly": "今月",
         "weekly_goal": "週間目標", "current": "現在", "goal": "目標",
         "progress": "進捗", "remaining_goal": "目標まで残り", "all_time_high": "過去最高",
         "previous": "前回", "improvement": "改善率", "record": "🏆 {period}収益の最高記録を更新",
