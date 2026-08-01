@@ -68,21 +68,22 @@ class RevenueAccumulator:
                         events, day_start - timedelta(days=1), day_start
                     ),
                 )
-            if (previous_local.year, previous_local.month) != (local.year, local.month):
-                completed_monthly = (
-                    self._monthly_total(
-                        events, previous_local.year, previous_local.month
-                    ),
-                )
+        current_month = self._payout_month(local)
+        if confirmed_reset:
+            closed_month = (boundary.year, boundary.month)
+            if closed_month != current_month:
+                completed_monthly = (self._monthly_total(events, *closed_month),)
         return RevenueSnapshot(
             timestamp=sample.timestamp,
             # "Hourly" is the newest successful observation, not a rolling
             # window or a normalized rate.  Using the event's increment avoids
             # double counting adjacent samples affected by clock drift.
             hourly_usd=increment,
-            daily_usd=self._sum_since(events, day_start),
+            daily_usd=self._balance_since(events, day_start),
             weekly_usd=sample.amount_usd,
-            monthly_usd=self._monthly_total(events, local.year, local.month),
+            monthly_usd=(
+                self._monthly_total(events, *current_month) + sample.amount_usd
+            ),
             yesterday_usd=self._sum_range(events, yesterday_start, day_start),
             completed_daily_usd=completed_daily,
             completed_weekly_usd=(previous,) if confirmed_reset else (),
@@ -114,9 +115,35 @@ class RevenueAccumulator:
         day_start = self._period_start(local, local.date(), time(9))
         return day_start - timedelta(days=(day_start.weekday() - 5) % 7)
 
+    def _payout_month(self, local: datetime) -> tuple[int, int]:
+        """Return the month of the Saturday that will complete the running week."""
+        week_end = self._weekly_boundary(local) + timedelta(days=7)
+        return week_end.year, week_end.month
+
     def _period_start(self, now: datetime, period_date: date, boundary: time) -> datetime:
         start = datetime.combine(period_date, boundary, tzinfo=self._timezone)
         return start if now >= start else start - timedelta(days=1)
+
+    @staticmethod
+    def _balance_since(events: list[dict[str, object]], start: datetime) -> float:
+        """Subtract the balance observed at a boundary from the current balance."""
+        current = float(events[-1]["balance"])
+        # A payout reset establishes a zero balance at the Saturday boundary,
+        # even when the lower balance is first observed a little later.
+        if any(
+            "completed_weekly_balance" in event
+            and datetime.fromisoformat(str(event.get("weekly_boundary", event["timestamp"])))
+            >= start
+            for event in events
+        ):
+            return current
+        before = [
+            event
+            for event in events
+            if datetime.fromisoformat(str(event["timestamp"])) < start
+        ]
+        baseline = float(before[-1]["balance"]) if before else float(events[0]["balance"])
+        return max(current - baseline, 0.0)
 
     @staticmethod
     def _sum_since(events: list[dict[str, object]], start: datetime) -> float:
@@ -143,9 +170,8 @@ class RevenueAccumulator:
         for event in events:
             if "completed_weekly_balance" not in event:
                 continue
-            closed = datetime.fromisoformat(str(event["timestamp"])).astimezone(
-                self._timezone
-            )
+            boundary_value = event.get("weekly_boundary", event["timestamp"])
+            closed = datetime.fromisoformat(str(boundary_value)).astimezone(self._timezone)
             if (closed.year, closed.month) == (year, month):
                 total += float(event["completed_weekly_balance"])
         return total

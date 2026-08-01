@@ -30,8 +30,8 @@ def test_samples_59_59_apart_are_not_summed_and_periods_still_aggregate(tmp_path
     assert one.hourly_usd == pytest.approx(3.56739328)
     assert two.hourly_usd == pytest.approx(5.35864710)
     assert two.daily_usd == pytest.approx(8.92604038)
-    # Monthly contains completed weekly closures, not in-progress deltas.
-    assert two.monthly_usd == 0
+    # Monthly includes the current running payout week.
+    assert two.monthly_usd == pytest.approx(28.92604038)
     assert two.weekly_usd == pytest.approx(28.92604038)
 
 
@@ -55,7 +55,7 @@ def _embed(language="en", weekly=95, goal_value=100):
 def test_translation_parity_and_labels_and_embed_limits():
     assert CATALOG["en"].keys() == CATALOG["ja"].keys()
     english, japanese = _embed("en"), _embed("ja")
-    assert "Hourly" in english["fields"][0]["value"]
+    assert "Latest interval" in english["fields"][0]["value"]
     assert "Remaining to Goal: $5.00" in english["fields"][1]["value"]
     assert "直近区間" in japanese["fields"][0]["value"]
     assert "目標まで残り" in japanese["fields"][1]["value"]

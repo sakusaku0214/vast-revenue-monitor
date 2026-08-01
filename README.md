@@ -9,7 +9,7 @@
 
 English | [日本語](README.ja.md)
 
-**Current Stable Release: v1.1.0**
+**Current Stable Release: v1.1.1**
 
 **Automatically monitor your Vast.ai revenue and send professional Discord notifications via Webhooks.**
 
@@ -207,8 +207,7 @@ Copy `config.example.json` to `config.json` for local development. Configure:
 The current-user endpoint exposes the weekly `balance`; it does not
 provide hourly, daily, weekly, and monthly revenue totals. The monitor therefore
 stores successive balance samples in `state/revenue_events.json` and counts only
-positive changes as observed revenue. Hourly, 09:00 business-day, Saturday 09:00
-weekly, and first-day 09:00 monthly totals are aggregated from those events.
+positive changes as observed revenue. Hourly, JST 09:00 business-day, and Saturday 09:00 payout-week totals are aggregated from those events. Payout months are built from payout weeks.
 
 The first successful sample establishes a baseline and reports zero revenue. A
 balance decrease contributes no negative revenue but always becomes the next
@@ -218,11 +217,7 @@ between 09:00 and the first post-reset sample are retained. Null, string, or boo
 balances are rejected before state is changed. `paid_expected` and `paid_verified`
 are not used by default.
 
-The default compact Discord report contains Hourly, Daily, and current Vast
-`balance` as Weekly revenue; an independent Weekly Goal; all-time highs; USDJPY;
-and local time. New records are sent as separate small gold embeds. Set
-`detailed_report` to `true` to additionally show monthly/change and daily-goal pace
-details.
+The default compact Discord report contains Latest interval, Today, Yesterday, This week, and This month; an independent Weekly Goal; the completed-period ATH panel; USDJPY; and local time. New records are sent as separate small gold embeds. Set `detailed_report` to `true` to additionally show changes and daily-goal pace details.
 
 Run once for validation:
 
@@ -430,33 +425,32 @@ Configuration is `/opt/vast-revenue-monitor/config.json`; runtime data is under 
 
 ```text
 💰 VAST.AI HOURLY REPORT
-Revenue — Hourly $5.36 · Daily $20.00 · Weekly $95.00
+Revenue — Latest interval $5.36 · Today $20.00 · Yesterday $18.00 · This week $95.00 · This month $380.00
 Weekly Goal — Current $95.00 · Goal $100.00 · Remaining to Goal $5.00
-Vast Revenue Monitor v1.1.0
+Vast Revenue Monitor v1.1.1
 ```
 
-## Revenue boundaries and completed-period records
+## Revenue boundaries and completed-period ATH
 
-All boundaries use the configured timezone (`Asia/Tokyo` by default):
+All boundaries below use JST.
 
-* **Today** is the active business day, from 09:00 through 08:59:59 the following day. **Yesterday** is the immediately preceding, completed 09:00-to-09:00 business day and remains fixed throughout Today.
-* **Week** begins at Saturday 09:00. Because Vast.ai can publish its payout reset late, the week closes only when an observation after the nominal boundary shows a real balance decrease. Crossing 09:00 with an unchanged or rising balance is an ordinary positive delta. At a confirmed drop, the previous balance is archived and the remaining balance initializes the new week.
-* **Month** is the sum of completed weekly balances whose actual reset-confirmation timestamp falls in that local calendar month. The in-progress week is excluded.
+* **Latest interval** is the positive balance change in the latest successful observation interval and updates each hour.
+* **Today** runs from 09:00 JST until now. It is the current balance minus the balance at Today's 09:00 boundary, not the cumulative account balance. **Yesterday** is the immediately preceding completed 09:00-to-09:00 period and remains fixed until the next rollover.
+* **This week** is the running Saturday 09:00-to-Saturday 09:00 payout week. A delayed payout is confirmed only by a real balance decrease; the prior balance then becomes the completed week.
+* **This month** is the completed payout weeks belonging to the current payout month plus the current running payout week. A week belongs to the month of its completing Saturday boundary, so payout months intentionally contain four or five weeks.
 
-The latest-interval (Hourly) value is the positive difference at the newest observation and may set an ATH immediately. Daily, Weekly, and Monthly ATHs and notifications use only completed business days, confirmed completed weeks, and completed calendar months respectively. Earnings whose exact time within a sampling interval is unknowable are attributed to the observation at the end of that interval; the monitor never extrapolates or normalizes them. A post-reset remainder is likewise attributed to the reset-confirming observation so it is not lost.
+The **ATH** panel is labeled Hourly, Daily, Weekly, and Monthly. Hourly ATH is the largest completed observation interval and updates immediately. Daily, Weekly, and Monthly ATHs never use running values: they update only from a completed 09:00-to-09:00 day, completed Saturday payout week, or completed payout month. Earnings are attributed to the observation ending their interval rather than extrapolated.
 
-### Repairing delayed-reset corruption
+### Explicit state repair
 
-Repair is explicit and dry-run by default. It takes the normal application lock, reports each evidence-backed correction, and leaves ambiguous candidates unchanged:
+The repair command is dry-run by default and detects delayed-reset corruption plus invalid Daily, Weekly, and Monthly ATH records reconstructable from retained snapshots. It never changes data unless `--apply` is explicitly supplied:
 
 ```bash
-sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py \
-  --config /opt/vast-revenue-monitor/config.json --repair-state
-sudo /opt/vast-revenue-monitor/.venv/bin/python /opt/vast-revenue-monitor/balance.py \
-  --config /opt/vast-revenue-monitor/config.json --repair-state --apply
+python3 balance.py --config /opt/vast-revenue-monitor/config.json --repair-state
+python3 balance.py --config /opt/vast-revenue-monitor/config.json --repair-state --apply
 ```
 
-Apply creates a timestamped `repair-backup-*` directory beside the state directory containing `config.json` and the complete state tree before atomic writes. This backup contains API credentials, the Discord webhook, and revenue history: protect it like the live configuration. To roll back, stop the service, move the current config/state aside, copy the backed-up `config.json` and `state/` into their original locations while preserving ownership, then restart the service.
+Apply first creates a timestamped `repair-backup-*` directory beside the state directory containing `config.json` and the complete state tree. Protect it like the live configuration. To roll back, stop the service, restore the backed-up configuration and state while preserving ownership, then restart the service.
 
 ## Safe upgrades
 

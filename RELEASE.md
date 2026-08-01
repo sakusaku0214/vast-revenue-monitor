@@ -1,3 +1,3 @@
-# Vast Revenue Monitor v1.1.0
+# Vast Revenue Monitor v1.1.1
 
-This accounting release confirms delayed weekly resets only on a real balance drop, adds Yesterday, assigns monthly revenue from completed weekly closings, restricts ATHs to completed periods (except Hourly), provides an explicit backed-up repair workflow, and adds the safe `sudo ./update.sh` production updater. Existing event arrays remain readable; new metadata is additive, while repair is never run automatically.
+This accounting consistency release calculates Today from the balance at the JST 09:00 boundary, keeps Yesterday fixed, and defines payout weeks as Saturday 09:00-to-Saturday 09:00. A payout month contains the four or five completed payout weeks assigned to it plus its current running week. Hourly ATH updates immediately; Daily, Weekly, and Monthly ATHs use completed periods only. The explicit, backup-first repair command can detect and rebuild invalid completed-period ATHs, but no repair is ever applied automatically.
