@@ -1,6 +1,11 @@
 # Changelog
 
-## v1.1.2 (unpublished)
+## v1.1.3 (unpublished)
+
+- Fix payout-month rollover so first-Saturday reset confirmations finalize the previous payout month, restart This month from the new running week, and update Monthly ATH only from completed payout-month evidence.
+- Extend explicit state repair coverage for missing or invalid Monthly ATH values rebuilt from persisted weekly closures.
+
+## v1.1.2
 
 - Resolve relative state and log directories from the configuration file location, independent of the caller's working directory.
 - Rebuild Hourly ATH from corrected positive interval increments during explicit state repair.

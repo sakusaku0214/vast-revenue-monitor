@@ -160,3 +160,48 @@ def test_cli_repair_finds_config_relative_state_from_unrelated_cwd(
     assert balance.main() == 0
     assert (install / "state" / "monitor.lock").exists()
     assert not (unrelated / "state").exists()
+
+
+def test_repair_dry_run_identifies_zero_monthly_ath_when_completed_month_exists(tmp_path, caplog):
+    caplog.set_level("INFO", logger="src.repair")
+    config = tmp_path / "config.json"
+    state = tmp_path / "state"
+    state.mkdir()
+    config.write_text('{"secret":"test-only"}\n', encoding="utf-8")
+    events = [
+        {"timestamp": "2026-07-25T08:59:00+09:00", "balance": 900.0, "increment": 10.0},
+        {"timestamp": "2026-08-01T10:00:00+09:00", "balance": 143.09, "increment": 143.09,
+         "completed_weekly_balance": 914.96, "weekly_boundary": "2026-08-01T09:00:00+09:00"},
+    ]
+    (state / "revenue_events.json").write_text(json.dumps(events), encoding="utf-8")
+    records_path = state / "records.json"
+    records_path.write_text(json.dumps({
+        "monthly": {"amount_usd": 0.0, "timestamp": "bad"},
+    }), encoding="utf-8")
+    before = records_path.read_bytes()
+
+    count, backup = repair_state(config, state)
+
+    assert count == 1 and backup is None
+    assert records_path.read_bytes() == before
+    assert "invalid monthly ATH 0.00 becomes 914.96" in caplog.text
+
+
+def test_repair_apply_backs_up_and_repairs_monthly_ath(tmp_path):
+    config = tmp_path / "config.json"
+    state = tmp_path / "state"
+    state.mkdir()
+    config.write_text('{"secret":"test-only"}\n', encoding="utf-8")
+    (state / "revenue_events.json").write_text(json.dumps([
+        {"timestamp": "2026-08-01T10:00:00+09:00", "balance": 143.09, "increment": 143.09,
+         "completed_weekly_balance": 914.96, "weekly_boundary": "2026-08-01T09:00:00+09:00"},
+    ]), encoding="utf-8")
+    records_path = state / "records.json"
+    records_path.write_text(json.dumps({"monthly": {"amount_usd": 0.0, "timestamp": "bad"}}), encoding="utf-8")
+
+    count, backup = repair_state(config, state, apply=True)
+    repaired = json.loads(records_path.read_text())
+
+    assert count == 1 and backup is not None
+    assert (backup / "state" / "records.json").exists()
+    assert repaired["monthly"]["amount_usd"] == pytest.approx(914.96)
