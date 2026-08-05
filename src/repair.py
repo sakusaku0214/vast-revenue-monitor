@@ -55,7 +55,8 @@ def _completed_ath(events: list[dict[str, object]]) -> dict[str, float]:
         boundary = datetime.fromisoformat(
             str(event.get("weekly_boundary", event["timestamp"]))
         ).astimezone(JST)
-        key = (boundary.year, boundary.month)
+        week_start = boundary - timedelta(days=7)
+        key = (week_start.year, week_start.month)
         monthly[key] = monthly.get(key, 0.0) + amount
     week_start = latest_start - timedelta(days=(latest_start.weekday() - 5) % 7)
     running_month_end = week_start + timedelta(days=7)

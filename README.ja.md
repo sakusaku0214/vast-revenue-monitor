@@ -14,7 +14,7 @@
   <a href="README.md">English</a> | 日本語
 </p>
 
-**現在の安定版：v1.1.2**
+**現在の安定版：v1.1.3**
 
 ## 概要
 
@@ -139,6 +139,8 @@ ATHはAll Time High、つまり過去最高記録です。
 Hourly ATHは有効な正の `increment` だけから計算します。口座残高そのものは使用しません。
 
 Daily、Weekly、Monthly ATHは、進行中の期間では更新されません。完了した期間だけが比較対象です。
+
+完了した payout week は、その週を開始した土曜日によって payout month に割り当てます。進行中の週は、次に到来する土曜日の締め境界が属する月の payout month です。新しい payout month に切り替わると「今月」は新しい進行中の週から再開し、前月の完了週は含めません。Monthly ATH は payout month が完了した後にのみ更新されます。月によって payout week は4週または5週になります。
 
 ## Ubuntu 24.04 LTSへのインストール
 

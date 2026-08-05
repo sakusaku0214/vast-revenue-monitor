@@ -85,5 +85,69 @@ def test_delayed_weekly_reset_requires_balance_drop(tmp_path):
     assert reset.hourly_usd == pytest.approx(5.13)
     assert reset.completed_weekly_usd == (914.96,)
     assert reset.weekly_usd == 5.13
-    # The payout month contains its completed weeks plus the running week.
-    assert reset.monthly_usd == pytest.approx(920.09)
+    # A first-Saturday closure completes the previous payout month; the new
+    # payout month starts from the running week only.
+    assert reset.monthly_usd == pytest.approx(5.13)
+    assert reset.completed_monthly_usd == pytest.approx((914.96,))
+
+
+def test_payout_month_rollover_excludes_previous_month_weeks(tmp_path):
+    accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    for boundary, total in [
+        (datetime(2026, 7, 11, 9, tzinfo=jst), 200.0),
+        (datetime(2026, 7, 18, 9, tzinfo=jst), 225.0),
+        (datetime(2026, 7, 25, 9, tzinfo=jst), 250.0),
+    ]:
+        accumulator.update(AccountBalance(boundary - timedelta(minutes=5), total))
+        accumulator.update(AccountBalance(boundary + timedelta(minutes=1), 1.0))
+    accumulator.update(AccountBalance(datetime(2026, 8, 1, 8, 55, tzinfo=jst), 239.96))
+    snapshot = accumulator.update(AccountBalance(datetime(2026, 8, 1, 10, tzinfo=jst), 143.09))
+
+    assert snapshot.weekly_usd == pytest.approx(143.09)
+    assert snapshot.monthly_usd == pytest.approx(143.09)
+    assert snapshot.completed_monthly_usd == pytest.approx((914.96,))
+
+
+def test_five_week_payout_month_and_restart_keeps_running_values(tmp_path):
+    accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    for boundary, total in [
+        (datetime(2026, 8, 8, 9, tzinfo=jst), 10.0),
+        (datetime(2026, 8, 15, 9, tzinfo=jst), 20.0),
+        (datetime(2026, 8, 22, 9, tzinfo=jst), 30.0),
+        (datetime(2026, 8, 29, 9, tzinfo=jst), 40.0),
+    ]:
+        accumulator.update(AccountBalance(boundary - timedelta(minutes=1), total))
+        accumulator.update(AccountBalance(boundary + timedelta(minutes=1), 1.0))
+    august = accumulator.update(AccountBalance(datetime(2026, 9, 5, 8, 59, tzinfo=jst), 50.0))
+    september = accumulator.update(AccountBalance(datetime(2026, 9, 5, 9, 1, tzinfo=jst), 2.0))
+
+    assert august.monthly_usd == pytest.approx(50.0)
+    assert september.monthly_usd == pytest.approx(2.0)
+    assert september.completed_monthly_usd == pytest.approx((150.0,))
+
+
+def test_delayed_first_saturday_confirmation_rolls_month_at_confirmation(tmp_path):
+    accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    accumulator.update(AccountBalance(datetime(2026, 7, 25, 9, tzinfo=jst), 900.0))
+    pending = accumulator.update(AccountBalance(datetime(2026, 8, 1, 9, 30, tzinfo=jst), 914.96))
+    reset = accumulator.update(AccountBalance(datetime(2026, 8, 1, 10, tzinfo=jst), 143.09))
+
+    assert pending.monthly_usd == pytest.approx(914.96)
+    assert reset.monthly_usd == pytest.approx(143.09)
+    assert reset.completed_monthly_usd == pytest.approx((914.96,))
+
+
+def test_restart_around_rollover_uses_persisted_weekly_closures(tmp_path):
+    path = tmp_path / "events.json"
+    jst = ZoneInfo("Asia/Tokyo")
+    first = RevenueAccumulator(path, jst)
+    first.update(AccountBalance(datetime(2026, 8, 1, 8, 59, tzinfo=jst), 914.96))
+    second = RevenueAccumulator(path, jst)
+    snapshot = second.update(AccountBalance(datetime(2026, 8, 1, 10, tzinfo=jst), 143.09))
+
+    assert snapshot.monthly_usd == pytest.approx(143.09)
+    assert snapshot.completed_weekly_usd == pytest.approx((914.96,))
+    assert snapshot.completed_monthly_usd == pytest.approx((914.96,))

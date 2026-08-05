@@ -68,9 +68,9 @@ class RevenueAccumulator:
                         events, day_start - timedelta(days=1), day_start
                     ),
                 )
-        current_month = self._payout_month(local)
+        current_month = self._running_payout_month(local)
         if confirmed_reset:
-            closed_month = (boundary.year, boundary.month)
+            closed_month = self._completed_week_payout_month(boundary)
             if closed_month != current_month:
                 completed_monthly = (self._monthly_total(events, *closed_month),)
         return RevenueSnapshot(
@@ -115,10 +115,22 @@ class RevenueAccumulator:
         day_start = self._period_start(local, local.date(), time(9))
         return day_start - timedelta(days=(day_start.weekday() - 5) % 7)
 
-    def _payout_month(self, local: datetime) -> tuple[int, int]:
+    def _running_payout_month(self, local: datetime) -> tuple[int, int]:
         """Return the month of the Saturday that will complete the running week."""
         week_end = self._weekly_boundary(local) + timedelta(days=7)
         return week_end.year, week_end.month
+
+    def _completed_week_payout_month(self, boundary: datetime) -> tuple[int, int]:
+        """Return the payout month for a week confirmed closed at ``boundary``.
+
+        Payout months roll over when the new running week's next Saturday
+        closing boundary moves into a new calendar month. Therefore the week
+        that just closed is assigned to the month of the Saturday that opened
+        that completed payout week, preventing it from leaking into the new
+        payout month after a first-Saturday reset.
+        """
+        week_start = boundary.astimezone(self._timezone) - timedelta(days=7)
+        return week_start.year, week_start.month
 
     def _period_start(self, now: datetime, period_date: date, boundary: time) -> datetime:
         start = datetime.combine(period_date, boundary, tzinfo=self._timezone)
@@ -172,6 +184,6 @@ class RevenueAccumulator:
                 continue
             boundary_value = event.get("weekly_boundary", event["timestamp"])
             closed = datetime.fromisoformat(str(boundary_value)).astimezone(self._timezone)
-            if (closed.year, closed.month) == (year, month):
+            if self._completed_week_payout_month(closed) == (year, month):
                 total += float(event["completed_weekly_balance"])
         return total

@@ -15,7 +15,7 @@
   English | <a href="README.ja.md">日本語</a>
 </p>
 
-**Current stable release: v1.1.2**
+**Current stable release: v1.1.3**
 
 ---
 
@@ -68,11 +68,11 @@ All period boundaries use the configured timezone (default: **Asia/Tokyo**).
 | Today | 09:00 JST until now |
 | Yesterday | Previous completed 09:00 → 09:00 period |
 | This week | Current payout week (Saturday 09:00 → now) |
-| This month | Completed payout weeks belonging to the current payout month plus the running payout week |
+| This month | Completed payout weeks belonging to the current payout month plus the running payout week only |
 
 Unlike calendar-based accounting, monthly revenue follows Vast.ai payout weeks.
 
-Depending on the calendar, a payout month may contain **4 or 5 completed payout weeks**.
+Each completed payout week is assigned to the payout month determined by the Saturday that opened that completed payout week; the running week is assigned to the month of its upcoming Saturday closing boundary. When that boundary moves into a new payout month, This month resets to the new running week and previous-month completed weeks stop contributing. Monthly ATH updates only after a payout month completes, never from an in-progress month. Depending on the calendar, a payout month may contain **4 or 5 completed payout weeks**.
 
 ---
 
