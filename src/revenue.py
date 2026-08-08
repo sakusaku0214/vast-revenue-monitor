@@ -64,7 +64,7 @@ class RevenueAccumulator:
             )
             if previous_day_start < day_start:
                 completed_daily = (
-                    self._sum_range(
+                    self._sum_daily_range(
                         events, day_start - timedelta(days=1), day_start
                     ),
                 )
@@ -79,12 +79,14 @@ class RevenueAccumulator:
             # window or a normalized rate.  Using the event's increment avoids
             # double counting adjacent samples affected by clock drift.
             hourly_usd=increment,
-            daily_usd=self._balance_since(events, day_start),
+            daily_usd=self._sum_daily_range(events, day_start, None),
             weekly_usd=sample.amount_usd,
             monthly_usd=(
                 self._monthly_total(events, *current_month) + sample.amount_usd
             ),
-            yesterday_usd=self._sum_range(events, yesterday_start, day_start),
+            yesterday_usd=self._sum_daily_range(
+                events, yesterday_start, day_start
+            ),
             completed_daily_usd=completed_daily,
             completed_weekly_usd=(previous,) if confirmed_reset else (),
             completed_monthly_usd=completed_monthly,
@@ -166,9 +168,32 @@ class RevenueAccumulator:
         )
 
     @staticmethod
+    def _sum_daily_range(
+        events: list[dict[str, object]], start: datetime, end: datetime | None
+    ) -> float:
+        """Sum intervals whose start timestamps fall within a business day.
+
+        Each stored increment describes the interval ending at that event.  Its
+        daily owner is therefore determined by the preceding successful sample,
+        not by the event's ending timestamp.  The first retained event has no
+        preceding evidence and is attributed to its own timestamp; normally its
+        increment is the zero baseline.
+        """
+        total = 0.0
+        for index, event in enumerate(events):
+            attribution_event = events[index - 1] if index else event
+            interval_start = datetime.fromisoformat(
+                str(attribution_event["timestamp"])
+            )
+            if interval_start >= start and (end is None or interval_start < end):
+                total += float(event["increment"])
+        return total
+
+    @staticmethod
     def _sum_range(
         events: list[dict[str, object]], start: datetime, end: datetime
     ) -> float:
+        """Sum events by observation timestamp for non-daily accounting."""
         return sum(
             float(event["increment"])
             for event in events

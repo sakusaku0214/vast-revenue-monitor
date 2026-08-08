@@ -37,10 +37,15 @@ def _completed_ath(events: list[dict[str, object]]) -> dict[str, float]:
     if latest < latest_start:
         latest_start -= timedelta(days=1)
     daily: dict[datetime, float] = {}
-    for event in events:
-        observed = datetime.fromisoformat(str(event["timestamp"])).astimezone(JST)
-        start = datetime.combine(observed.date(), time(9), tzinfo=JST)
-        if observed < start:
+    for index, event in enumerate(events):
+        # An increment ends at this event but belongs to the business day that
+        # contains the preceding successful sample (the interval start).
+        attribution_event = events[index - 1] if index else event
+        interval_start = datetime.fromisoformat(
+            str(attribution_event["timestamp"])
+        ).astimezone(JST)
+        start = datetime.combine(interval_start.date(), time(9), tzinfo=JST)
+        if interval_start < start:
             start -= timedelta(days=1)
         if start < latest_start:
             daily[start] = daily.get(start, 0.0) + float(event.get("increment", 0.0))

@@ -1,6 +1,11 @@
 # Changelog
 
-## v1.1.3 (unpublished)
+## v1.1.4 (unpublished)
+
+- Attribute each daily revenue increment to the JST business day containing its interval start, so the final pre-09:00 interval completes Yesterday and Today begins at zero at exactly 09:00.
+- Rebuild Daily ATH from the corrected completed-day attribution during explicit state repair while preserving the event-state format and backup-first apply behavior.
+
+## v1.1.3
 
 - Fix payout-month rollover so first-Saturday reset confirmations finalize the previous payout month, restart This month from the new running week, and update Monthly ATH only from completed payout-month evidence.
 - Extend explicit state repair coverage for missing or invalid Monthly ATH values rebuilt from persisted weekly closures.

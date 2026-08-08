@@ -15,7 +15,7 @@
   English | <a href="README.ja.md">日本語</a>
 </p>
 
-**Current stable release: v1.1.3**
+**Current stable release: v1.1.4**
 
 ---
 
@@ -69,6 +69,8 @@ All period boundaries use the configured timezone (default: **Asia/Tokyo**).
 | Yesterday | Previous completed 09:00 → 09:00 period |
 | This week | Current payout week (Saturday 09:00 → now) |
 | This month | Completed payout weeks belonging to the current payout month plus the running payout week only |
+
+The daily business day is the half-open period from **09:00:00 JST inclusive** to the next **09:00:00 JST exclusive**. Revenue increments describe `(previous successful sample, current successful sample]` and are assigned to the business day containing the interval start. Therefore, an interval ending exactly at 09:00 belongs to Yesterday, Today starts at **$0.00** at 09:00, and the first increment added to Today is the interval whose start is at or after 09:00. A delayed interval crossing the boundary is kept whole and is not estimated or split between days.
 
 Unlike calendar-based accounting, monthly revenue follows Vast.ai payout weeks.
 
