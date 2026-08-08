@@ -1,5 +1,5 @@
-# Vast Revenue Monitor v1.1.3
+# Vast Revenue Monitor v1.1.4
 
-This hotfix corrects payout-month rollover accounting. Completed payout weeks are rebuilt from persisted weekly reset evidence, the running week is assigned to the month of its next Saturday closing boundary, and a first-Saturday payout reset finalizes the previous payout month instead of carrying prior completed weeks into the new month. After rollover, This month starts from the new running payout week, while Monthly ATH updates only from completed payout-month totals.
+This hotfix corrects daily revenue attribution at the JST 09:00 boundary. Each observed increment represents the interval from the previous successful sample through the current sample and is assigned to the business day containing that interval's start. Consequently, an interval ending exactly at 09:00 completes Yesterday, Today is exactly $0.00 at rollover, and the interval starting at 09:00 is the first revenue added to Today.
 
-The release also extends explicit backup-first state repair so `--repair-state` can detect and repair missing or invalid Monthly ATH values, including `0.00`, when completed payout-month evidence exists. Existing Today, Yesterday, This week, Hourly ATH, Daily ATH, and Weekly ATH behavior remains unchanged.
+Daily ATH now uses the corrected completed 09:00-to-09:00 total. Explicit backup-first state repair can detect and correct a Daily ATH produced by the old end-timestamp attribution using the existing persisted event evidence. Latest interval, weekly and payout-month accounting, and non-daily ATH behavior are unchanged.

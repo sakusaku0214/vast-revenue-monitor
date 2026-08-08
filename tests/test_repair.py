@@ -205,3 +205,35 @@ def test_repair_apply_backs_up_and_repairs_monthly_ath(tmp_path):
     assert count == 1 and backup is not None
     assert (backup / "state" / "records.json").exists()
     assert repaired["monthly"]["amount_usd"] == pytest.approx(914.96)
+
+
+def test_repair_corrects_daily_ath_with_interval_ending_at_0900(tmp_path, caplog):
+    caplog.set_level("INFO", logger="src.repair")
+    config = tmp_path / "config.json"
+    state = tmp_path / "state"
+    state.mkdir()
+    config.write_text('{"secret":"test-only"}\n', encoding="utf-8")
+    events = [
+        {"timestamp": "2026-08-06T09:00:00+09:00", "balance": 100.0, "increment": 0.0},
+        {"timestamp": "2026-08-07T08:00:00+09:00", "balance": 227.04, "increment": 127.04},
+        {"timestamp": "2026-08-07T09:00:00+09:00", "balance": 232.34, "increment": 5.30},
+        {"timestamp": "2026-08-07T10:00:00+09:00", "balance": 237.54, "increment": 5.20},
+    ]
+    (state / "revenue_events.json").write_text(json.dumps(events), encoding="utf-8")
+    records_path = state / "records.json"
+    records_path.write_text(json.dumps({
+        "daily": {"amount_usd": 127.04, "timestamp": events[2]["timestamp"]},
+    }), encoding="utf-8")
+    before = records_path.read_bytes()
+
+    count, backup = repair_state(config, state)
+
+    assert count == 1 and backup is None
+    assert records_path.read_bytes() == before
+    assert "invalid daily ATH 127.04 becomes 132.34" in caplog.text
+
+    count, backup = repair_state(config, state, apply=True)
+    repaired = json.loads(records_path.read_text())
+    assert count == 1 and backup is not None
+    assert (backup / "state" / "records.json").read_bytes() == before
+    assert repaired["daily"]["amount_usd"] == pytest.approx(132.34)

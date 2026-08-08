@@ -5,7 +5,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from src.models import AccountBalance
+from src.models import AccountBalance, Period
+from src.records import RecordsStore
 from src.revenue import RevenueAccumulator
 from src.utils import read_json
 
@@ -26,7 +27,7 @@ def test_revenue_accumulator_uses_positive_balance_deltas(tmp_path):
     assert recovered.hourly_usd == 1.0
 
 
-def test_revenue_accumulator_resets_daily_total_at_0900(tmp_path):
+def test_delayed_observation_crossing_0900_stays_with_interval_start_day(tmp_path):
     accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
     before = datetime(2026, 7, 26, 8, 30, tzinfo=ZoneInfo("Asia/Tokyo"))
     after = datetime(2026, 7, 26, 9, 30, tzinfo=ZoneInfo("Asia/Tokyo"))
@@ -34,19 +35,114 @@ def test_revenue_accumulator_resets_daily_total_at_0900(tmp_path):
     accumulator.update(AccountBalance(before, 10.0))
     snapshot = accumulator.update(AccountBalance(after, 12.0))
 
-    assert snapshot.daily_usd == 2.0
+    assert snapshot.hourly_usd == 2.0
+    assert snapshot.daily_usd == 0.0
+    assert snapshot.yesterday_usd == 2.0
 
 
-def test_today_is_current_balance_minus_balance_at_0900(tmp_path):
+def test_exact_production_style_daily_rollover_sequence(tmp_path):
     accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
-    boundary = datetime(2026, 7, 26, 9, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    boundary = datetime(2026, 8, 7, 9, 0, tzinfo=jst)
 
-    accumulator.update(AccountBalance(boundary - timedelta(minutes=1), 100.0))
-    first = accumulator.update(AccountBalance(boundary, 103.0))
-    current = accumulator.update(AccountBalance(boundary + timedelta(hours=1), 107.5))
+    accumulator.update(AccountBalance(boundary - timedelta(days=1), 100.0))
+    at_0800 = accumulator.update(
+        AccountBalance(boundary - timedelta(hours=1), 227.04)
+    )
+    at_0900 = accumulator.update(AccountBalance(boundary, 232.34))
+    at_1000 = accumulator.update(
+        AccountBalance(boundary + timedelta(hours=1), 237.54)
+    )
 
-    assert first.daily_usd == pytest.approx(3.0)
-    assert current.daily_usd == pytest.approx(7.5)
+    assert at_0800.daily_usd == pytest.approx(127.04)
+    assert at_0900.hourly_usd == pytest.approx(5.30)
+    assert at_0900.daily_usd == pytest.approx(0.0)
+    assert at_0900.yesterday_usd == pytest.approx(132.34)
+    assert at_0900.completed_daily_usd == pytest.approx((132.34,))
+    assert at_1000.hourly_usd == pytest.approx(5.20)
+    assert at_1000.daily_usd == pytest.approx(5.20)
+    assert at_1000.yesterday_usd == pytest.approx(132.34)
+
+
+def test_intervals_on_each_side_of_exact_0900_have_one_daily_owner(tmp_path):
+    accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    boundary = datetime(2026, 8, 7, 9, tzinfo=jst)
+
+    accumulator.update(AccountBalance(boundary - timedelta(seconds=1), 10.0))
+    at_boundary = accumulator.update(AccountBalance(boundary, 12.0))
+    after_boundary = accumulator.update(AccountBalance(boundary + timedelta(hours=1), 15.0))
+
+    assert at_boundary.daily_usd == 0.0
+    assert at_boundary.yesterday_usd == 2.0
+    assert after_boundary.daily_usd == 3.0
+    assert after_boundary.yesterday_usd == 2.0
+
+
+def test_microsecond_interval_ending_at_0900_belongs_to_previous_day(tmp_path):
+    accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    boundary = datetime(2026, 8, 7, 9, tzinfo=jst)
+
+    accumulator.update(AccountBalance(boundary - timedelta(microseconds=1), 10.0))
+    at_boundary = accumulator.update(AccountBalance(boundary, 11.25))
+    after = accumulator.update(AccountBalance(boundary + timedelta(microseconds=1), 12.0))
+
+    assert at_boundary.daily_usd == 0.0
+    assert at_boundary.yesterday_usd == pytest.approx(1.25)
+    assert after.daily_usd == pytest.approx(0.75)
+    assert after.yesterday_usd == pytest.approx(1.25)
+
+
+def test_missing_boundary_sample_does_not_split_or_extrapolate_increment(tmp_path):
+    accumulator = RevenueAccumulator(tmp_path / "events.json", ZoneInfo("Asia/Tokyo"))
+    jst = ZoneInfo("Asia/Tokyo")
+    boundary = datetime(2026, 8, 7, 9, tzinfo=jst)
+
+    accumulator.update(AccountBalance(boundary - timedelta(hours=2), 20.0))
+    delayed = accumulator.update(AccountBalance(boundary + timedelta(hours=2), 24.5))
+
+    assert delayed.hourly_usd == pytest.approx(4.5)
+    assert delayed.daily_usd == 0.0
+    assert delayed.yesterday_usd == pytest.approx(4.5)
+
+
+def test_restart_on_both_sides_of_0900_preserves_daily_attribution(tmp_path):
+    path = tmp_path / "events.json"
+    jst = ZoneInfo("Asia/Tokyo")
+    boundary = datetime(2026, 8, 7, 9, tzinfo=jst)
+    before_restart = RevenueAccumulator(path, jst)
+    before_restart.update(AccountBalance(boundary - timedelta(hours=1), 100.0))
+
+    at_boundary = RevenueAccumulator(path, jst).update(AccountBalance(boundary, 105.0))
+    after_restart = RevenueAccumulator(path, jst).update(
+        AccountBalance(boundary + timedelta(hours=1), 107.0)
+    )
+
+    assert at_boundary.daily_usd == 0.0
+    assert at_boundary.yesterday_usd == pytest.approx(5.0)
+    assert after_restart.daily_usd == pytest.approx(2.0)
+    assert after_restart.yesterday_usd == pytest.approx(5.0)
+
+
+def test_daily_ath_uses_corrected_completed_total_not_incomplete_today(tmp_path):
+    jst = ZoneInfo("Asia/Tokyo")
+    boundary = datetime(2026, 8, 7, 9, tzinfo=jst)
+    accumulator = RevenueAccumulator(tmp_path / "events.json", jst)
+    records = RecordsStore(tmp_path / "records.json")
+    accumulator.update(AccountBalance(boundary - timedelta(days=1), 100.0))
+    records.update(
+        accumulator.update(AccountBalance(boundary - timedelta(hours=1), 227.04))
+    )
+
+    rollover = accumulator.update(AccountBalance(boundary, 232.34))
+    records.update(rollover)
+    current = accumulator.update(AccountBalance(boundary + timedelta(hours=1), 400.0))
+    records.update(current)
+
+    assert rollover.completed_daily_usd == pytest.approx((132.34,))
+    assert current.daily_usd == pytest.approx(167.66)
+    assert records.highest()[Period.DAILY] == pytest.approx(132.34)
 
 
 def test_weekly_reset_archives_previous_week_and_counts_post_reset_balance(tmp_path):
